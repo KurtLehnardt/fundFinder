@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { createPortal } from "react-dom";
 import { getAutoApplyRequirements } from "@/lib/mockAuth";
 import { useDialogA11y } from "@/components/useDialogA11y";
 
@@ -101,7 +102,10 @@ export default function AutoApplyModal({
     ? "mt-6 border-t border-structure-on-canvas pt-4 text-pretty font-body text-[11px] leading-relaxed text-foreground"
     : "mt-6 border-t border-rule pt-4 font-body text-[11px] leading-relaxed text-slate-550";
 
-  return (
+  // Portaled to document.body so the fixed overlay escapes the opportunity
+  // card's stacking/overflow context and opens as a true viewport overlay.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8 sm:items-center"
       onClick={onClose}
@@ -170,7 +174,8 @@ export default function AutoApplyModal({
           submitted from this screen.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
