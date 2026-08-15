@@ -6,12 +6,27 @@ import { useAuth } from "@/components/AuthProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import SearchProgress from "@/components/SearchProgress";
 
+// FE-02 (R7.1): one honest, non-numeric one-liner per sample so the picker
+// reads as "fictional example companies," not a filter on the user's own
+// business. Keep these purely descriptive — no invented stats beyond what's
+// already in TEST_CASES[].text.
+const SAMPLE_BLURBS: Record<string, string> = {
+  "ai-healthcare": "Fictional health-tech startup easing nurses' admin workload with AI.",
+  manufacturing: "Fictional hardware startup scaling up lightweight aerospace component manufacturing.",
+  water: "Fictional climate-tech startup using sensors and AI to cut municipal water loss.",
+  cyber: "Fictional cybersecurity startup building AI-powered threat detection.",
+  marketplace: "Fictional local marketplace startup — an intentionally hard case likely to return few or no strong matches.",
+};
+
 export default function IntakeForm({ onResult }: { onResult: (m: any) => void }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Real pipeline milestone streamed from /api/match (drives SearchProgress).
   const [progress, setProgress] = useState<{ pct: number; label: string } | null>(null);
+  // FE-02 (R7.1): sample-company picker is collapsed by default; it's a
+  // secondary affordance behind a real visual break, not an inline filter row.
+  const [samplesOpen, setSamplesOpen] = useState(false);
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
 
@@ -93,6 +108,20 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     }
   }
 
+  // FE-02 (R7.1): picking a sample must flow through the same run() as a
+  // real submission (streaming, SearchProgress, caching — all untouched).
+  // Only confirm-before-overwrite is new, and only when there's meaningful
+  // user text already in the box.
+  function selectSample(tc: (typeof TEST_CASES)[number]) {
+    if (text.trim().length > 0) {
+      const ok = window.confirm("Replace your description with this sample company?");
+      if (!ok) return;
+    }
+    setText(tc.text);
+    setSamplesOpen(false);
+    run(tc.text);
+  }
+
   const labelClass = design
     ? "block mb-3 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
     : "eyebrow block mb-3";
@@ -108,12 +137,44 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     ? "rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
     : "rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35";
 
-  const orLabelClass = design ? "font-mono text-[11px] text-foreground" : "font-mono text-[11px] text-slate-550";
+  // FE-02 (R7.1): the sample-company picker lives below a real visual break
+  // (border-t + vertical space), not inline with the CTA. It's a secondary
+  // affordance -> navy "structure" role, never green (`bg-action` is
+  // reserved for the primary CTA only).
+  const sampleSectionClass = design
+    ? "mt-6 border-t border-structure-on-canvas pt-5"
+    : "mt-6 border-t border-rule pt-5";
 
-  // Sample/test-case buttons are secondary actions -> navy structure, not green.
-  const sampleButtonClass = design
-    ? "rounded-sm border border-structure-on-canvas bg-canvas-alt px-3 py-1.5 font-mono text-[11px] text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:opacity-40"
-    : "rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] text-slate-550 transition hover:border-federal hover:text-federal disabled:opacity-40";
+  const sampleTriggerClass = design
+    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:cursor-not-allowed disabled:opacity-40"
+    : "min-h-[44px] rounded-sm border border-rule bg-white px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal disabled:cursor-not-allowed disabled:opacity-40";
+
+  // Expanded picker panel gets its own subtle background-tone shift (on top
+  // of the border-t break above) so it reads as a distinct, optional area.
+  const samplePanelClass = design
+    ? "mt-3 rounded-sm border border-structure-on-canvas bg-canvas-alt p-4"
+    : "mt-3 rounded-sm border border-rule bg-white p-4";
+
+  const samplePanelIntroClass = design
+    ? "font-body text-[13px] leading-relaxed text-foreground"
+    : "font-body text-[13px] leading-relaxed text-slate-550";
+
+  // List items, not chips: each is a full-width card with a label + one-line
+  // description so it reads as "pick an example company," not a filter.
+  // `group` + `group-hover:*` on the children lets the hover-fill state
+  // (navy on r7_design, federal-blue text on v1) recolor both label and
+  // blurb together, matching the required white-on-structure-fill pairing.
+  const sampleItemClass = design
+    ? "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-structure-on-canvas bg-canvas px-3.5 py-2.5 text-left transition hover:bg-structure disabled:cursor-not-allowed disabled:opacity-40"
+    : "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-rule bg-paper px-3.5 py-2.5 text-left transition hover:border-federal disabled:cursor-not-allowed disabled:opacity-40";
+
+  const sampleItemLabelClass = design
+    ? "font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas group-hover:text-token-white"
+    : "font-mono text-[12px] uppercase tracking-eyebrow text-ink group-hover:text-federal";
+
+  const sampleItemBlurbClass = design
+    ? "font-body text-[13px] leading-relaxed text-foreground group-hover:text-token-white"
+    : "font-body text-[13px] leading-relaxed text-slate-550 group-hover:text-federal";
 
   // Error state is a legitimate semantic role -> `error` token. As a 2px
   // border (non-text, 3:1 threshold) this passes AA against canvas-alt/canvas
@@ -180,24 +241,48 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         >
           {loading ? "Searching…" : "Find opportunities"}
         </button>
-        <span className={orLabelClass}>or try a test case</span>
       </div>
 
       {loading && (
         <SearchProgress design={design} realPct={progress?.pct} realLabel={progress?.label} />
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {TEST_CASES.map((tc) => (
-          <button
-            key={tc.id}
-            onClick={() => { setText(tc.text); run(tc.text); }}
-            disabled={loading}
-            className={sampleButtonClass}
-          >
-            {tc.label}
-          </button>
-        ))}
+      {/* FE-02 (R7.1): sample-company picker — a real visual break (border-t
+          + vertical space) separates this from the user's own description,
+          so it reads as "try an example," not a filter on their business. */}
+      <div className={sampleSectionClass}>
+        <button
+          type="button"
+          onClick={() => setSamplesOpen((open) => !open)}
+          aria-expanded={samplesOpen}
+          disabled={loading}
+          className={sampleTriggerClass}
+        >
+          {samplesOpen ? "Hide sample companies" : "See a sample company"}
+        </button>
+
+        {samplesOpen && (
+          <div className={samplePanelClass}>
+            <p className={samplePanelIntroClass}>
+              These are fictional example companies — pick one to see how fundFinder works.
+            </p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {TEST_CASES.map((tc) => (
+                <li key={tc.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectSample(tc)}
+                    disabled={loading}
+                    className={sampleItemClass}
+                  >
+                    <span className={sampleItemLabelClass}>{tc.label}</span>
+                    <span className={sampleItemBlurbClass}>{SAMPLE_BLURBS[tc.id]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {error && (
