@@ -67,7 +67,9 @@ export async function explainMatches(
 ): Promise<Array<{ id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string }>> {
   const msg = await client().messages.create({
     model: MODEL,
-    max_tokens: 8000,
+    // ~700-900 tokens per assessment; must cover candidateCount candidates or the
+    // JSON array is truncated mid-string and parseJson throws. Keep >= candidateCount * 900.
+    max_tokens: 24000,
     system: `You assess fit between a startup and federal funding opportunities.
 
 Return ONLY a JSON array, no preamble, no markdown fences:

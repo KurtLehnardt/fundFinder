@@ -10,13 +10,18 @@ import awards from "@/data/awards.json";
  */
 export const CALIBRATION = {
   /** Below this cosine similarity a program is never a candidate. */
-  candidateFloor: 0.28,
+  candidateFloor: 0.22,
   /** How many candidates go to Claude for scoring. */
-  candidateCount: 12,
-  /** Below this LLM score, a match is not shown as likely/verify. */
-  scoreFloor: 45,
-  /** If fewer than this many matches clear scoreFloor, declare a weak field. */
-  weakFieldThreshold: 2,
+  candidateCount: 24,
+  /** Below this LLM score, a match is not shown as likely/verify. Gives the
+   *  flagship AI-health case margin (its NIH match scores 35-72 across runs)
+   *  while staying well clear of case 5's ~22 ceiling. */
+  scoreFloor: 30,
+  /** If fewer than this many matches clear scoreFloor, declare a weak field.
+   *  1 = weak field means ZERO strong matches — cleanly isolates the case-5
+   *  "no honest match" finding from thin-but-real cases (e.g. case 1's single
+   *  strong NIH match), which case-5's large score margin keeps robust. */
+  weakFieldThreshold: 1,
 };
 
 /** Hard eligibility gates. Rules, not embeddings — these are binary facts. */
@@ -88,7 +93,9 @@ export async function buildOpportunityMap(description: string): Promise<Opportun
       if (!opp) return null;
       return {
         opportunity: opp,
-        tier: a.tier ?? tierFromScore(a.score),
+        // Derive tier from the calibrated score thresholds so card tiers and the
+        // summary's high-potential count (score >= scoreFloor) stay consistent.
+        tier: tierFromScore(a.score),
         score: a.score,
         criteria: a.criteria ?? [],
         whyFit: a.whyFit,

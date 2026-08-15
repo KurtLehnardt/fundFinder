@@ -17,10 +17,13 @@ const CASES = [
   ["marketplace", "We're an 8-person Utah technology startup running a marketplace connecting parents with local youth activities and enrichment programs. $750K revenue, raised $1M, looking for $250K–$1M for expansion and technology development."],
 ];
 
+// Grafana holds :3000 on the build machine, so `next dev` binds :3001. Override
+// with PORT if your dev server is elsewhere: PORT=3000 node scripts/4-precompute.mjs
+const PORT = process.env.PORT || "3001";
 const out = [];
 for (const [id, text] of CASES) {
   process.stdout.write(`${id.padEnd(16)} `);
-  const res = await fetch("http://localhost:3000/api/match", {
+  const res = await fetch(`http://localhost:${PORT}/api/match`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ description: text }),
