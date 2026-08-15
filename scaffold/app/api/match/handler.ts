@@ -5,15 +5,27 @@ import { OpportunityMapSchema } from "@/lib/contracts/opportunityMap";
 import precomputed from "@/data/precomputed.json";
 
 /**
- * Validate the top-level product payload against its schema at the API boundary
- * (arch review MEDIUM — it was never parsed before streaming). NOTE: we
- * `safeParse` for VALIDATION ONLY and stream the ORIGINAL `map`, never
- * `parsed.data`: the live map carries additive fields (`matches[].eligibility`,
- * `costDebug`) that the schema doesn't declare and zod would strip. `.success`
- * still catches a genuinely malformed shape (missing/typed-wrong required field).
+ * Boundary validation is OBSERVABILITY ONLY (arch review MEDIUM — the payload
+ * was never parsed before streaming). We `safeParse` and always stream the
+ * ORIGINAL `map`, never `parsed.data`: the live map carries additive fields
+ * (`matches[].eligibility`, `costDebug`) the schema doesn't declare and zod
+ * would strip.
+ *
+ * CRITICAL: a schema mismatch must NEVER turn a completed search into an error
+ * — that re-introduces the H1 "silent search dead-end" on the flagship journey.
+ * (It did: a too-strict schema was rejecting ~2/3 of real novel searches and
+ * surfacing "The search didn't complete.") So on failure we LOG the exact zod
+ * issues for reconciliation and serve the real map anyway — the client renders
+ * it fine. Both the cached and live paths degrade identically.
  */
-function isValidMap(map: unknown): boolean {
-  return OpportunityMapSchema.safeParse(map).success;
+function logMapDrift(map: unknown, label: string): void {
+  const check = OpportunityMapSchema.safeParse(map);
+  if (!check.success) {
+    console.warn(
+      `OpportunityMap boundary validation failed (${label}); serving anyway:`,
+      JSON.stringify(check.error.issues.slice(0, 10)),
+    );
+  }
 }
 
 /**
@@ -116,11 +128,9 @@ export async function handleMatchRequest(
       try {
         const hit = deps.cached(description);
         if (hit) {
-          // Pre-baked demo insurance: validate for drift visibility but never
-          // block a pre-vetted demo case on it — warn and serve.
-          if (!isValidMap(hit)) {
-            console.warn("cached map failed OpportunityMap schema validation (serving anyway)");
-          }
+          // Pre-baked demo insurance: log drift for visibility but never block
+          // a pre-vetted demo case on it — serve anyway.
+          logMapDrift(hit, "cached");
           send({ type: "progress", key: "cached", label: "Loading your opportunity map", pct: 95 });
           send({ type: "result", map: hit });
           controller.close();
@@ -134,14 +144,9 @@ export async function handleMatchRequest(
           ac.signal,
           companyFacts,
         );
-        // Catch a live-shape drift at the boundary rather than shipping a
-        // malformed payload the client can only guess at.
-        if (!isValidMap(map)) {
-          console.error("buildOpportunityMap produced a map that failed schema validation");
-          send({ type: "error", error: "The search didn't complete. Please try again." });
-          controller.close();
-          return;
-        }
+        // Log any boundary drift for visibility, but ALWAYS stream the real,
+        // completed map — never dead-end a finished search on schema strictness.
+        logMapDrift(map, "live");
         send({ type: "result", map });
         controller.close();
       } catch (err: any) {
