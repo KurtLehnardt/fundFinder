@@ -138,3 +138,27 @@ test("buildOpportunityMap throwing mid-stream emits a type:'error' line and the 
   assert.ok(errs[0].error && typeof errs[0].error === "string" && errs[0].error.length > 0);
   assert.equal(lines.filter((l) => l.type === "result").length, 0);
 });
+
+test("a COMPLETED map that fails OpportunityMap schema still streams a result — never dead-ends the search", async () => {
+  // Regression for the boundary-validation dead-end: a live map that doesn't
+  // satisfy the (over-strict) schema must still be streamed to the client, not
+  // converted into 'The search didn't complete.' (that broke ~2/3 of novel
+  // searches in prod). Validation is observability-only.
+  const brokenButRenderable = {
+    summary: { highPotential: "not-a-number" }, // wrong type → fails schema
+    matches: [],
+  } as unknown as OpportunityMap;
+  const res = await handleMatchRequest(post(JSON.stringify({ description: VALID_DESCRIPTION })), {
+    cached: () => undefined,
+    buildOpportunityMap: async () => brokenButRenderable,
+  });
+  const lines = await readLines(res);
+  const results = lines.filter((l) => l.type === "result");
+  assert.equal(lines.filter((l) => l.type === "error").length, 0, "must not dead-end on schema strictness");
+  assert.equal(results.length, 1, "a finished search must stream its result");
+  assert.equal(
+    results[0].map.summary.highPotential,
+    "not-a-number",
+    "streams the ORIGINAL map (additive fields intact), not a stripped parsed.data",
+  );
+});
