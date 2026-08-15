@@ -96,8 +96,13 @@ export function toEntitlementsView(ent: Entitlements): EntitlementsView {
  * pro (isPro/assistedApplication true, legacy `tier` "pro" since the contract
  * has no "max"). The FE-07 fields below carry the true tier + per-tier limits.
  */
-export function useEntitlements(): EntitlementsView {
-  const billingTier = getBillingTier();
+export function useEntitlements(tier: BillingTier = getBillingTier()): EntitlementsView {
+  // Single source of truth: components pass the REACTIVE tier from `useBilling()`
+  // (the mounted BillingProvider context) so all Pro framing reacts to the same
+  // state and can't diverge from the OpportunityCard padlocks during hydration or
+  // after an in-modal tier change (arch review MEDIUM). The `getBillingTier()`
+  // default is a non-reactive fallback for non-React callers/tests only.
+  const billingTier = tier;
   const feats = billingFeatures(billingTier);
   // max collapses to "pro" for the legacy 2-tier contract fields only.
   const legacyTier: SubscriptionTier = billingTier === "free" ? "free" : "pro";

@@ -3,15 +3,22 @@ import { extractProfile, explainMatches, explainWeakField } from "./claude";
 import type { Opportunity, OpportunityMap, StartupProfile, Match, Tier, AwardHistory } from "./types";
 import { screen } from "./eligibility/screen";
 import { annotateFreshness } from "./eligibility/freshness";
-import { toCompanyProfile, toScreenableOpportunity } from "./eligibility/bridge";
+import { toCompanyProfile, toScreenableOpportunity, type KnownCompanyFacts } from "./eligibility/bridge";
 import corpus from "@/data/opportunities.json";
 import awards from "@/data/awards.json";
 import { createCostMeter, type CostMeter } from "./metering/meter";
+import { CURRENT_OPPORTUNITY_MAP_VERSION } from "./contracts/opportunityMap";
 import { isFlagEnabled } from "./flags";
 
 /**
  * CALIBRATION KNOBS — tune these against all five test cases before touching UI.
  * Too aggressive and cases 1-4 under-match. Too loose and case 5 hallucinates.
+ *
+ * SOURCE OF TRUTH for these values + their audit trail:
+ * `docs/calibration-baseline.md` (see its "CURRENT SHIPPED CALIBRATION"
+ * section). If you change a knob here, update that doc in the SAME commit — the
+ * baseline's older guidance is explicitly superseded there. A full golden-set
+ * re-validation (evals/golden-set.jsonl) remains the outstanding audit step.
  */
 export const CALIBRATION = {
   /** Below this cosine similarity a program is never a candidate. */
@@ -132,6 +139,7 @@ export async function buildOpportunityMap(
   onStep?: (e: StepEvent) => void,
   deps: Partial<BuildDeps> = {},
   signal?: AbortSignal,
+  companyFacts?: KnownCompanyFacts,
 ): Promise<OpportunityMap> {
   const d: BuildDeps = { ...REAL_DEPS, ...deps };
   // Progress is best-effort: a reporting error must never fail the search.
@@ -220,7 +228,7 @@ export async function buildOpportunityMap(
   // corpus has only free-text eligibility), so the universal overlay drives the
   // buckets. DEFENSIVE: a screening error must NEVER break the search — each
   // screen() is wrapped, and a failure simply omits the field for that match.
-  const companyProfile = toCompanyProfile(profile);
+  const companyProfile = toCompanyProfile(profile, companyFacts);
   for (const m of matches) {
     try {
       const determination = d.screen(companyProfile, toScreenableOpportunity(m.opportunity));
@@ -256,6 +264,9 @@ export async function buildOpportunityMap(
   const agencies = Array.from(new Set(strong.map((m) => m.opportunity.agency)));
 
   const result: OpportunityMap = {
+    // §3.6 — stamp the contract version on every live write so consumers can
+    // branch on it later (the affordance was inert while producers never wrote it).
+    version: CURRENT_OPPORTUNITY_MAP_VERSION,
     profile,
     followUps,
     summary: {
@@ -284,6 +295,7 @@ async function weakField(
   signal?: AbortSignal,
 ): Promise<OpportunityMap> {
   const result: OpportunityMap = {
+    version: CURRENT_OPPORTUNITY_MAP_VERSION,
     profile,
     followUps,
     summary: { highPotential: 0, fundingIdentified: 0, agencies: 0, closingIn90Days: 0 },

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
 import type { OpportunityMap as MapT } from "@/lib/types";
@@ -8,6 +8,7 @@ import { isFlagEnabled } from "@/lib/flags";
 import { SidebarProvider, useSidebar } from "@/components/SidebarProvider";
 import SignInNudge from "@/components/SignInNudge";
 import { useAnalytics } from "@/components/AnalyticsProvider";
+import { latestRun, saveRun } from "@/lib/runs/runsStore";
 
 // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
 // look on this A/B branch (previously gated behind r7_design). The token
@@ -34,6 +35,23 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   const { expanded, width, resizing } = useSidebar();
   const analytics = useAnalytics();
 
+  // Arch review MEDIUM: persist completed runs so a reload doesn't lose the
+  // ~2-minute result. Restore the most recent run once on mount if the user
+  // hasn't already started a new search. `restoredRef` marks that the current
+  // map came from a restore, so the funnel effect below doesn't re-emit
+  // first_result_rendered for it (a reload isn't a fresh search).
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (map) return;
+    const last = latestRun();
+    if (last) {
+      restoredRef.current = true;
+      setMap(last.map);
+    }
+    // Once, on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Desktop content shift: pad left by the sidebar width when expanded. The
   // padding only applies >= md (globals.css); during a resize drag we drop the
   // transition so the column tracks the pointer instead of lagging behind it.
@@ -55,6 +73,14 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   // is on. Keyed on the map object (a fresh one per search) so it fires once.
   useEffect(() => {
     if (!map) return;
+    // A restored run (reload) is not a fresh search — persist nothing new and
+    // don't re-emit the result funnel; just clear the flag for the next change.
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      return;
+    }
+    // Fresh completed result: persist it so a subsequent reload can restore it.
+    saveRun(map);
     const resultsShown = map.matches.length;
     if (resultsShown > 0) {
       analytics.firstResultRendered({

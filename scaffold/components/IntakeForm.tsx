@@ -5,7 +5,7 @@ import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
-import { clearAllLocalData } from "@/lib/mockAuth";
+import { clearAllLocalData, getAutoApplyRequirements } from "@/lib/mockAuth";
 import { BRAND } from "@/lib/brand";
 import Swal from "sweetalert2";
 import SearchProgress from "@/components/SearchProgress";
@@ -70,6 +70,12 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // PreSearchInterview's "Search anyway" always searches what the founder
   // actually asked the interview about.
   const [originalDescription, setOriginalDescription] = useState("");
+  // Interview "generating" guard: a hung /api/interview must never strand the
+  // user on a disabled box (frontend review MEDIUM — "never blocks the free
+  // path"). An AbortController + timeout falls back to a direct search, and the
+  // ref lets the "skip questions" button abort the in-flight call.
+  const INTERVIEW_TIMEOUT_MS = 12_000;
+  const interviewAbortRef = useRef<AbortController | null>(null);
 
   // r9_0_mockauth (CON-03): flag off -> no consent/delete UI, v1 path unchanged.
   // This control gates NOTHING server-side — the pipeline call below sends
@@ -130,11 +136,17 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     // content is sent — the event is a name + timestamp only.
     searchStartRef.current = Date.now();
     analytics.searchStarted();
+    // Arch review: feed the founder's OWN self-reported SAM/UEI (from the local
+    // Auto Apply form) into eligibility screening so a registered founder isn't
+    // told to register. Empty when unfilled -> server no-ops it. Not analytics,
+    // not the description; used transiently server-side for screening only.
+    const reqs = getAutoApplyRequirements();
+    const companyFacts = { samRegistered: reqs.samRegistered, uei: reqs.uei };
     try {
       const res = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({ description, companyFacts }),
       });
 
       // H1: ANY non-OK response is an error, regardless of content-type. A
@@ -223,12 +235,18 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     }
     setError(null);
     setInterviewPhase("generating");
+    // Timeout/skip guard: abort a hung interview and fall back to a direct search.
+    const controller = new AbortController();
+    interviewAbortRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), INTERVIEW_TIMEOUT_MS);
     try {
       const res = await fetch("/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
       if (!res.ok) {
         setInterviewPhase("idle");
         run(description);
@@ -247,10 +265,20 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       // H5: the pre-search interview was shown (count only, no content).
       analytics.interviewShown({ questions: questions.length });
     } catch {
-      // Network error / bad JSON — never block the free path.
+      // Timeout, manual skip (abort), network error, or bad JSON — never block
+      // the free path; fall straight through to the search.
+      window.clearTimeout(timeout);
       setInterviewPhase("idle");
       run(description);
+    } finally {
+      interviewAbortRef.current = null;
     }
+  }
+
+  /** "Search now, skip questions" during the generating phase — aborts the
+   *  in-flight interview so beginSearch()'s catch falls back to a direct run(). */
+  function skipInterviewGenerating() {
+    interviewAbortRef.current?.abort();
   }
 
   function handleInterviewComplete(enrichedDescription: string) {
@@ -426,9 +454,18 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       {/* R1 (FE-03): brief status while INT-01 generates routing questions.
           Not the SearchProgress bar — that's reserved for /api/match. */}
       {interviewPhase === "generating" && (
-        <p className={interviewStatusClass} role="status" aria-live="polite">
-          Preparing a few quick questions…
-        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className={interviewStatusClass} role="status" aria-live="polite">
+            Preparing a few quick questions…
+          </p>
+          <button
+            type="button"
+            onClick={skipInterviewGenerating}
+            className="font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline decoration-dotted underline-offset-2 transition hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+          >
+            Search now, skip questions
+          </button>
+        </div>
       )}
 
       {/* R1 (FE-03): inline (non-modal) interview — questions phase, then an

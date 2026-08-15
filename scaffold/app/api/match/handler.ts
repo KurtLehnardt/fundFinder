@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { buildOpportunityMap, type StepEvent } from "@/lib/match";
 import { rateLimit, clientKey } from "@/lib/security/rateLimit";
+import { OpportunityMapSchema } from "@/lib/contracts/opportunityMap";
 import precomputed from "@/data/precomputed.json";
+
+/**
+ * Validate the top-level product payload against its schema at the API boundary
+ * (arch review MEDIUM — it was never parsed before streaming). NOTE: we
+ * `safeParse` for VALIDATION ONLY and stream the ORIGINAL `map`, never
+ * `parsed.data`: the live map carries additive fields (`matches[].eligibility`,
+ * `costDebug`) that the schema doesn't declare and zod would strip. `.success`
+ * still catches a genuinely malformed shape (missing/typed-wrong required field).
+ */
+function isValidMap(map: unknown): boolean {
+  return OpportunityMapSchema.safeParse(map).success;
+}
 
 /**
  * Server-side input bounds for the unauthenticated, real-money match endpoint
@@ -52,9 +65,21 @@ export async function handleMatchRequest(
   // Validation errors return plain JSON (the client checks res.ok before
   // reading the stream). Everything else streams NDJSON progress + result.
   let description: string;
+  // Founder self-reported registration facts, sanitized to primitives here (the
+  // server mints the user_stated provenance in the bridge — never trust a
+  // client-supplied provenance label). Optional; absent -> unchanged screening.
+  let companyFacts: { samRegistered?: boolean; uei?: string } | undefined;
   try {
     const body = await req.json();
     description = body?.description;
+    const cf = body?.companyFacts;
+    if (cf && typeof cf === "object") {
+      companyFacts = {};
+      if (cf.samRegistered === true) companyFacts.samRegistered = true;
+      if (typeof cf.uei === "string" && cf.uei.trim().length > 0) {
+        companyFacts.uei = cf.uei.trim().slice(0, 64);
+      }
+    }
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -91,7 +116,11 @@ export async function handleMatchRequest(
       try {
         const hit = deps.cached(description);
         if (hit) {
-          // Pre-baked: still emit a milestone so the bar resolves cleanly.
+          // Pre-baked demo insurance: validate for drift visibility but never
+          // block a pre-vetted demo case on it — warn and serve.
+          if (!isValidMap(hit)) {
+            console.warn("cached map failed OpportunityMap schema validation (serving anyway)");
+          }
           send({ type: "progress", key: "cached", label: "Loading your opportunity map", pct: 95 });
           send({ type: "result", map: hit });
           controller.close();
@@ -103,7 +132,16 @@ export async function handleMatchRequest(
           (e: StepEvent) => send({ type: "progress", ...e }),
           undefined,
           ac.signal,
+          companyFacts,
         );
+        // Catch a live-shape drift at the boundary rather than shipping a
+        // malformed payload the client can only guess at.
+        if (!isValidMap(map)) {
+          console.error("buildOpportunityMap produced a map that failed schema validation");
+          send({ type: "error", error: "The search didn't complete. Please try again." });
+          controller.close();
+          return;
+        }
         send({ type: "result", map });
         controller.close();
       } catch (err: any) {

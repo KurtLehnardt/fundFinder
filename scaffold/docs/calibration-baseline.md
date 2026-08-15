@@ -1,5 +1,39 @@
 # Calibration baseline & resume note (2026-08-14)
 
+## CURRENT SHIPPED CALIBRATION (2026-08-15 — supersedes the baseline below)
+
+`lib/match.ts` `CALIBRATION` now ships:
+
+| knob | shipped | old baseline (below) |
+|---|---|---|
+| candidateFloor | **0.22** | 0.28 |
+| candidateCount | **24** | 12 |
+| scoreFloor | **30** | 45 |
+| weakFieldThreshold | **1** | 2 |
+
+**Why the retune (audit trail — this section is the reconciliation the arch
+review asked for):** the baseline below diagnosed cases 1 (AI-healthcare) and 4
+(cyber) as *starved* — false weak-fields — because `candidateCount 12` scored too
+few candidates and `scoreFloor 45` sat above where real-but-thin matches land
+(the AI-health NIH match scores ~35–72 across runs). The shipped values follow
+the baseline's own "Next steps" direction (raise candidateCount toward the
+scaffold default, lower candidateFloor) and additionally drop `scoreFloor` to 30
+and `weakFieldThreshold` to 1 so a single genuine strong match (case 1) is no
+longer mislabeled a weak field, while staying well clear of case 5's ~22 score
+ceiling (so case 5 stays a correct honest-no). See the `CALIBRATION` doc comment
+in `lib/match.ts` for the per-knob rationale.
+
+**The old "keep scoreFloor at 45 … do NOT drop below ~38" and
+"weakFieldThreshold=2" guidance in the baseline below is SUPERSEDED** — it
+predates this retune and no longer describes what ships.
+
+**OUTSTANDING (not done in this pass):** these shipped values were validated
+against the 5 demo cases but NOT re-validated end-to-end against the full 31-entry
+`evals/golden-set.jsonl`. A full golden-set re-validation (per "How to re-measure"
+below — ~10 min, spends live API keys, needs the dev server on :3001) is the
+remaining audit step before treating the current numbers as golden-set-verified.
+Whoever next changes `CALIBRATION` must update THIS section in the same commit.
+
 ## Environment gotcha (IMPORTANT)
 Port **3000 is taken by Grafana** on this machine, so `next dev` binds **:3001**.
 - Test the app at `http://localhost:3001`, NOT :3000.

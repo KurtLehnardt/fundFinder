@@ -7,6 +7,7 @@ import {
   type AutoApplyRequirements,
 } from "@/lib/mockAuth";
 import { useAuth } from "@/components/AuthProvider";
+import { useBilling } from "@/components/BillingProvider";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import { useEntitlements } from "@/lib/entitlements/useEntitlements";
 
@@ -75,7 +76,10 @@ export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
   const design = true;
   const { user, signIn } = useAuth();
   // Pro *framing* only — this gates nothing and entitles nothing (see the stub).
-  const entitlements = useEntitlements();
+  // Source the tier from the reactive BillingProvider context (single source of
+  // truth) so this framing stays in lockstep with the OpportunityCard padlocks.
+  const { tier: billingTier } = useBilling();
+  const entitlements = useEntitlements(billingTier);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
