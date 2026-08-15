@@ -33,7 +33,8 @@ export type FlagName =
   | "r8_eligibility"
   | "r9_0_mockauth"
   | "r9_supabase_auth"
-  | "r10_analytics";
+  | "r10_analytics"
+  | "r4b_cost_debug";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -119,5 +120,13 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
     requirement: "R10.1",
     description: "Funnel event instrumentation emission (landing view, search started, etc).",
     envVar: "NEXT_PUBLIC_FLAG_R10_ANALYTICS",
+  },
+  r4b_cost_debug: {
+    name: "r4b_cost_debug",
+    requirement: "R4b",
+    description:
+      "Attach a per-search cost/latency breakdown to the API response for a debug/admin view. " +
+      "Cost figures must never reach the end-user UI without this flag.",
+    envVar: "NEXT_PUBLIC_FLAG_R4B_COST_DEBUG",
   },
 };

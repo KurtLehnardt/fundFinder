@@ -6,6 +6,8 @@ import { annotateFreshness } from "./eligibility/freshness";
 import { toCompanyProfile, toScreenableOpportunity } from "./eligibility/bridge";
 import corpus from "@/data/opportunities.json";
 import awards from "@/data/awards.json";
+import { createCostMeter, type CostMeter } from "./metering/meter";
+import { isFlagEnabled } from "./flags";
 
 /**
  * CALIBRATION KNOBS — tune these against all five test cases before touching UI.
@@ -65,6 +67,31 @@ function historyFor(oppId: string, state?: string): AwardHistory | undefined {
  *  once this step has finished. */
 export type StepEvent = { key: string; label: string; pct: number; detail?: string };
 
+/**
+ * R4b — always logs the structured per-search cost/latency line (there's no
+ * real logging backend yet; see `track.ts`'s `defaultSink` for precedent),
+ * and attaches `costDebug` to the result ONLY when `r4b_cost_debug` is on —
+ * cost figures must never reach the end-user UI without that flag (CON-03
+ * pattern: `lib/flags/registry.ts` + `env.ts`). Called from both
+ * `buildOpportunityMap`'s normal return and the `weakField()` early exit, so
+ * every completed search gets exactly one `[cost]` log line.
+ *
+ * Wrapped here too, on top of `CostMeter`'s own internal defensiveness
+ * (belt-and-suspenders, per the R4b task's "a metering bug must never be the
+ * reason a search fails") — this function itself must never throw.
+ */
+function finalizeCost(meter: CostMeter, result: OpportunityMap): void {
+  try {
+    const costSummary = meter.summary();
+    meter.logSummary(costSummary);
+    if (isFlagEnabled("r4b_cost_debug")) {
+      result.costDebug = costSummary;
+    }
+  } catch (err) {
+    console.warn("[metering] failed to finalize the cost summary for this search:", err);
+  }
+}
+
 export async function buildOpportunityMap(
   description: string,
   onStep?: (e: StepEvent) => void,
@@ -73,8 +100,13 @@ export async function buildOpportunityMap(
   const step = (e: StepEvent) => { try { onStep?.(e); } catch { /* ignore */ } };
   step({ key: "start", label: "Reading the federal register…", pct: 5 });
 
+  // R4b — one CostMeter per search, threaded through every LLM/embedding
+  // call below (including the weakField() early-exit path). Every method on
+  // it is internally defensive and never throws (lib/metering/meter.ts).
+  const meter = createCostMeter();
+
   // 1 + 2. Intake and adaptive follow-ups.
-  const { profile, followUps } = await extractProfile(description);
+  const { profile, followUps } = await extractProfile(description, meter);
   step({ key: "profile", label: "Understood your company", pct: 18 });
 
   // 3. Semantic expansion — embed the founder profile plus expanded gov terms.
@@ -86,7 +118,7 @@ export async function buildOpportunityMap(
     profile.targetCustomers,
     (profile.expandedTerms ?? []).join(", "),
   ].filter(Boolean).join("\n");
-  const queryVec = await embed(queryText);
+  const queryVec = await embed(queryText, meter);
   step({ key: "embed", label: "Searching 476 programs", pct: 32 });
 
   // 4. Hybrid retrieval: rules gate, then similarity, then LLM scoring.
@@ -100,11 +132,11 @@ export async function buildOpportunityMap(
 
   if (scored.length === 0) {
     step({ key: "weak", label: "Writing your finding…", pct: 80 });
-    return weakField(profile, followUps);
+    return weakField(profile, followUps, meter);
   }
 
   step({ key: "score", label: "Scoring and explaining your matches", pct: 52 });
-  const assessments = await explainMatches(profile, scored.map((s) => s.o));
+  const assessments = await explainMatches(profile, scored.map((s) => s.o), meter);
   step({ key: "assemble", label: "Writing your opportunity map", pct: 90 });
   const byId = new Map(scored.map((s) => [s.o.id, s.o]));
 
@@ -153,7 +185,7 @@ export async function buildOpportunityMap(
 
   // 5. The honest no. Weak field is a finding, not an empty state.
   const weak = strong.length < CALIBRATION.weakFieldThreshold
-    ? await explainWeakField(profile)
+    ? await explainWeakField(profile, meter)
     : undefined;
 
   const now = Date.now();
@@ -164,7 +196,7 @@ export async function buildOpportunityMap(
 
   const agencies = Array.from(new Set(strong.map((m) => m.opportunity.agency)));
 
-  return {
+  const result: OpportunityMap = {
     profile,
     followUps,
     summary: {
@@ -181,15 +213,19 @@ export async function buildOpportunityMap(
       opportunityCount: strong.filter((m) => m.opportunity.agency === agency).length,
     })),
   };
+  finalizeCost(meter, result);
+  return result;
 }
 
-async function weakField(profile: StartupProfile, followUps: string[]): Promise<OpportunityMap> {
-  return {
+async function weakField(profile: StartupProfile, followUps: string[], meter: CostMeter): Promise<OpportunityMap> {
+  const result: OpportunityMap = {
     profile,
     followUps,
     summary: { highPotential: 0, fundingIdentified: 0, agencies: 0, closingIn90Days: 0 },
     matches: [],
-    weakFieldFinding: await explainWeakField(profile),
+    weakFieldFinding: await explainWeakField(profile, meter),
     agencyIntelligence: [],
   };
+  finalizeCost(meter, result);
+  return result;
 }
