@@ -18,7 +18,6 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { useBilling } from "@/components/BillingProvider";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
@@ -54,7 +53,10 @@ const STATUS_LABEL: Record<GrantStatus, string> = {
 const STATUS_ORDER: GrantStatus[] = ["unapplied", "pending", "granted"];
 
 export default function AppSidebar({ onClose }: { onClose: () => void }) {
-  const design = isFlagEnabled("r7_design");
+  // Design revamp: CON-02 60/30/10 tokens are the default look; darkMode is
+  // "media", so these tokens flip automatically and the drawer honors system
+  // dark mode. (v1 fallback branches are retained but unreachable.)
+  const design = true;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
@@ -151,8 +153,8 @@ export default function AppSidebar({ onClose }: { onClose: () => void }) {
   const panelBase =
     "relative z-10 flex h-full w-full flex-col overflow-y-auto transition-transform duration-200 ease-out sm:max-w-[320px]";
   const panelSkin = design
-    ? "border-r border-structure-on-canvas bg-canvas text-foreground"
-    : "border-r border-rule bg-white text-ink";
+    ? "border-r border-structure-on-canvas bg-canvas text-foreground shadow-overlay"
+    : "border-r border-rule bg-white text-ink shadow-overlay";
   const panelClass = `${panelBase} ${panelSkin} ${mounted ? "translate-x-0" : "-translate-x-full"}`;
 
   const headerClass = design

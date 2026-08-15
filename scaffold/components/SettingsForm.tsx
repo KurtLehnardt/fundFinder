@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import {
   getAutoApplyRequirements,
   setAutoApplyRequirements,
@@ -18,13 +17,15 @@ import {
  * exactly as before — nothing here is sent anywhere, and "Delete my data"
  * clears it with everything else.
  *
+ * Token-styled (CON-02 60/30/10) — the design revamp made these the default, so
+ * the classes are the token set directly (no r7_design ternary). darkMode is
+ * "media", so the tokens flip automatically.
+ *
  * `onClose` is optional: the modal passes it so the "Close" text button renders
  * in the button row (keeping SettingsPanel's markup identical); the sidebar
  * section omits it (there is nothing to close — it's an inline section).
  */
 export default function SettingsForm({ onClose }: { onClose?: () => void }) {
-  const design = isFlagEnabled("r7_design");
-
   const [form, setForm] = useState<AutoApplyRequirements>(() => getAutoApplyRequirements());
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -39,31 +40,17 @@ export default function SettingsForm({ onClose }: { onClose?: () => void }) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const legendClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground"
-    : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550";
-
-  const fieldWrapClass = design
-    ? "mt-5 border-t border-structure-on-canvas pt-4 first:mt-4 first:border-t-0 first:pt-0"
-    : "mt-5 border-t border-rule pt-4 first:mt-4 first:border-t-0 first:pt-0";
-
-  const inputClass = design
-    ? "mt-1.5 w-full rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-body text-[13px] text-foreground"
-    : "mt-1.5 w-full rounded-sm border border-rule bg-white px-2.5 py-1.5 font-body text-[13px] text-ink";
-
-  const labelTextClass = design ? "font-body text-[13px] text-foreground" : "font-body text-[13px] text-ink";
-
-  const saveBtnClass = design
-    ? "rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "rounded-sm border border-federal px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
-
-  const closeTextBtnClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
-
-  const savedMsgClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "font-mono text-[11px] uppercase tracking-eyebrow text-fit-strong";
+  const legendClass = "font-mono text-[11px] uppercase tracking-eyebrow text-foreground";
+  const fieldWrapClass =
+    "mt-5 border-t border-structure-on-canvas pt-4 first:mt-4 first:border-t-0 first:pt-0";
+  const inputClass =
+    "mt-1.5 w-full rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-body text-[13px] text-foreground outline-none transition focus:border-structure-on-canvas focus:ring-2 focus:ring-structure-on-canvas";
+  const labelTextClass = "font-body text-[13px] text-foreground";
+  const saveBtnClass =
+    "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
+  const closeTextBtnClass =
+    "inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 transition hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
+  const savedMsgClass = "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas";
 
   return (
     <form onSubmit={handleSave}>

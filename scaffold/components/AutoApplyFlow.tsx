@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import {
   getAutoApplyRequirements,
   setAutoApplyRequirements,
@@ -71,7 +70,9 @@ const REQUIREMENTS: Array<{ key: RequirementKey; label: string; detail: string }
 const STEP_ORDER: Step[] = ["signin", "requirements", "review"];
 
 export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
-  const design = isFlagEnabled("r7_design");
+  // Design revamp: USWDS 60/30/10 restyle is the DEFAULT on this A/B branch
+  // (previously gated behind r7_design).
+  const design = true;
   const { user, signIn } = useAuth();
   // Pro *framing* only — this gates nothing and entitles nothing (see the stub).
   const entitlements = useEntitlements();

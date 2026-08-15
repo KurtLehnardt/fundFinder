@@ -40,6 +40,15 @@ export default {
         body: ["var(--font-body)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
+
+      // Polish pass — elevation shadows, CSS-variable-backed so they adapt
+      // light/dark from app/globals.css (see --shadow-* there). Used to give
+      // cards / panels / overlays depth instead of a hard navy border.
+      boxShadow: {
+        card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
+        overlay: "var(--shadow-overlay)",
+      },
       letterSpacing: { eyebrow: "0.14em" },
 
       // v2 type scale (CON-02). Additive — v1 uses arbitrary text-[Npx]

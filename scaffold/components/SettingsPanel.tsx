@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import SettingsForm from "@/components/SettingsForm";
 
@@ -16,35 +15,26 @@ import SettingsForm from "@/components/SettingsForm";
  * it renders the same eyebrow/title/note + close chrome and the same form
  * inside, with the "Close" button preserved by passing `onClose` through.
  *
+ * Token-styled (CON-02 60/30/10) — the design revamp made these the default.
+ *
  * Persisted to localStorage only (lib/mockAuth.ts) — nothing here is sent
  * anywhere, and PLT-01's "Delete my data" clears it along with everything
  * else, since it lives under the same STORAGE_KEYS map.
  */
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const design = isFlagEnabled("r7_design");
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
 
-  const panelClass = design
-    ? "relative max-h-[85vh] w-full max-w-md overflow-y-auto border border-structure-on-canvas bg-canvas p-6 text-foreground"
-    : "relative max-h-[85vh] w-full max-w-md overflow-y-auto border border-rule bg-white p-6 text-ink";
-
-  const eyebrowClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "eyebrow";
-
-  const titleClass = design
-    ? "mt-2 font-display text-[22px] font-bold leading-snug text-foreground"
-    : "mt-2 font-display text-[22px] font-bold leading-snug";
-
-  const noteClass = design
-    ? "mt-2 font-body text-[12px] leading-relaxed text-foreground"
-    : "mt-2 font-body text-[12px] leading-relaxed text-slate-550";
-
-  const closeIconBtnClass = design
-    ? "absolute right-4 top-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "absolute right-4 top-4 text-slate-550 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+  // Modal: elevated surface (rounded + overlay shadow) with a definition border
+  // over the scrim.
+  const panelClass =
+    "relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border border-structure-on-canvas bg-canvas p-6 text-foreground shadow-overlay";
+  const eyebrowClass = "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas";
+  const titleClass = "mt-2 text-balance font-display text-[22px] font-bold leading-snug text-foreground";
+  const noteClass = "mt-2 text-pretty font-body text-[12px] leading-relaxed text-foreground";
+  const closeIconBtnClass =
+    "absolute right-3 top-3 rounded-sm p-1 text-foreground transition hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
 
   return (
     <div
