@@ -10,6 +10,61 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * CON-02 design-token contract — CSS custom properties.
+ *
+ * These values must stay in sync with lib/design/tokens.ts (`colors.light`
+ * / `colors.dark`). This is a manual sync today (no build-time codegen in
+ * this slice) — see the CON-02 report for that tradeoff.
+ *
+ * v1 is unaffected: `body` above still reads `theme('colors.paper')` /
+ * `theme('colors.ink')`, and `:root { color-scheme: light }` is untouched.
+ * Nothing in v1 references these variables yet — FE-01 (slice 2) is where
+ * components start consuming them.
+ */
+:root {
+  --color-canvas: #f9f9f9;
+  --color-canvas-alt: #ecf1f7;
+  --color-foreground: #212121;
+  --color-structure-fill: #005ea2;
+  --color-structure-on-canvas: #005ea2;
+  --color-action: #538200;
+  --color-white: #ffffff;
+  --color-info: #00bde3;
+  --color-success: #04c585;
+  --color-warning: #ffbe2e;
+  --color-error: #e52207;
+}
+
+/*
+ * Dark theme. NOT mandated by R7.2 (which is written entirely in light-mode
+ * terms) — these are CON-02's own conservative, WCAG-AA-verified defaults,
+ * flagged for product sign-off before any surface actually ships a dark
+ * mode. `--color-structure-on-canvas` is the one value that MUST differ
+ * from light mode: raw #005ea2 text/borders directly on a dark canvas
+ * measure 2.56:1, failing both the 4.5:1 text and 3:1 non-text AA
+ * thresholds, so dark mode substitutes USWDS blue-30v (#73b3e7, 7.65:1 on
+ * --color-canvas) for that role only. `--color-structure-fill` keeps
+ * #005ea2 in both themes because it is a self-contained pairing (white
+ * text on a navy fill) whose ratio does not depend on the surrounding
+ * page background.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #1b1b1b;
+    --color-canvas-alt: #16232c;
+    --color-foreground: #f1f1f1;
+    --color-structure-fill: #005ea2;
+    --color-structure-on-canvas: #73b3e7;
+    --color-action: #538200;
+    --color-white: #ffffff;
+    --color-info: #00bde3;
+    --color-success: #04c585;
+    --color-warning: #ffbe2e;
+    --color-error: #e52207;
+  }
+}
+
 .eyebrow {
   @apply font-mono text-[11px] uppercase tracking-eyebrow text-slate-550;
 }
