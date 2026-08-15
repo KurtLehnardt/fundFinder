@@ -43,11 +43,15 @@ function withinNinetyDays(deadline?: string): boolean {
  */
 function fundingCell(shown: Match[]): { n: string; label: string } | null {
   const strong = shown.filter((m) => m.tier === "likely" || m.tier === "verify");
-  const sum = strong.reduce((acc, m) => {
-    const o = m.opportunity;
-    return acc + (o.fundingHigh ?? o.fundingLow ?? m.history?.medianAward ?? 0);
-  }, 0);
-  if (sum > 0) return { n: money(sum), label: "potential funding identified" };
+
+  // Prefer the programs' own stated funding ranges — that's real "potential funding".
+  const stated = strong.reduce((acc, m) => acc + (m.opportunity.fundingHigh ?? m.opportunity.fundingLow ?? 0), 0);
+  if (stated > 0) return { n: money(stated), label: "potential funding identified" };
+
+  // Otherwise fall back to what similar companies actually received — and label
+  // it honestly as such, not as this founder's potential funding.
+  const median = strong.reduce((acc, m) => acc + (m.history?.medianAward ?? 0), 0);
+  if (median > 0) return { n: money(median), label: "median award to similar companies" };
 
   const awarded = shown.reduce((acc, m) => acc + (m.history?.totalAwarded ?? 0), 0);
   if (awarded > 0) return { n: money(awarded), label: "awarded to similar companies" };
