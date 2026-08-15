@@ -37,12 +37,6 @@ export const SIDEBAR_SECTION_IDS: readonly SidebarSectionId[] = [
 export const SIDEBAR_MIN_WIDTH = 240;
 export const SIDEBAR_MAX_WIDTH = 420;
 export const SIDEBAR_DEFAULT_WIDTH = 288;
-/**
- * When collapsed, the sidebar isn't hidden entirely — it peeks this many px so
- * it stays discoverable. Sized a bit wider than the 36px (h-9/w-9) toggle icon
- * so the peeking edge clears the re-open icon without colliding with it.
- */
-export const SIDEBAR_COLLAPSED_PEEK = 52;
 
 const STORAGE_KEY = 'ff.ui.sidebar.v1';
 

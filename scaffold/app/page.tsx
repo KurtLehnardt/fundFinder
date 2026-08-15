@@ -6,7 +6,6 @@ import type { OpportunityMap as MapT } from "@/lib/types";
 import AppMenu from "@/components/AppMenu";
 import { isFlagEnabled } from "@/lib/flags";
 import { SidebarProvider, useSidebar } from "@/components/SidebarProvider";
-import { SIDEBAR_COLLAPSED_PEEK } from "@/lib/sidebar/sidebarPrefs";
 import WelcomeTour from "@/components/WelcomeTour";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 import { latestRun, saveRun } from "@/lib/runs/runsStore";
@@ -57,7 +56,7 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   // padding only applies >= md (globals.css); during a resize drag we drop the
   // transition so the column tracks the pointer instead of lagging behind it.
   const shiftStyle: CSSProperties | undefined = sidebarOn
-    ? ({ ["--app-sidebar-offset"]: `${expanded ? width : SIDEBAR_COLLAPSED_PEEK}px` } as CSSProperties)
+    ? ({ ["--app-sidebar-offset"]: `${expanded ? width : 0}px` } as CSSProperties)
     : undefined;
   const mainClass = [
     "mx-auto min-h-screen max-w-4xl bg-canvas px-6 py-14 text-foreground sm:py-20",
