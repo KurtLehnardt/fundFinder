@@ -2,9 +2,10 @@
 import { useState } from "react";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
+import type { OpportunityMap as MapT } from "@/lib/types";
 
 export default function Home() {
-  const [map, setMap] = useState<any>(null);
+  const [map, setMap] = useState<MapT | null>(null);
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-14 sm:py-20">
