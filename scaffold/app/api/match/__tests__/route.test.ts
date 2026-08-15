@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { handleMatchRequest, type MatchDeps } from "../route";
+import { handleMatchRequest, type MatchDeps } from "../handler";
 import type { OpportunityMap } from "@/lib/types";
 
 /**
