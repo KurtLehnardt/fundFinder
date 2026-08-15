@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter, IBM_Plex_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { SettingsPanelProvider } from "@/components/AppMenu";
+import { BillingProvider } from "@/components/BillingProvider";
+import { SearchDraftProvider } from "@/components/SearchDraftProvider";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
@@ -35,8 +37,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           each OpportunityCard both open the same panel through it, without
           prop-drilling through OpportunityMap.
         */}
+        {/*
+          BillingProvider (FE-07) and SearchDraftProvider (FE-07) are the same
+          kind of always-on, no-UI, no-network passive contexts as the two
+          above: BillingProvider holds the local MOCK billing tier that the
+          drawer's Billing section and the OpportunityCard padlocks read (so a
+          tier change reflects live); SearchDraftProvider carries the drawer's
+          "Use this" text into IntakeForm's search box. Mounting them
+          unconditionally does not change flag-off behavior — nothing reads them
+          in a way that alters today's UI unless the left_sidebar flag is on.
+        */}
         <AuthProvider>
-          <SettingsPanelProvider>{children}</SettingsPanelProvider>
+          <BillingProvider>
+            <SearchDraftProvider>
+              <SettingsPanelProvider>{children}</SettingsPanelProvider>
+            </SearchDraftProvider>
+          </BillingProvider>
         </AuthProvider>
       </body>
     </html>

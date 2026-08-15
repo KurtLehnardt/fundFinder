@@ -5,6 +5,7 @@ import AutoApplyModal from "@/components/AutoApplyModal";
 import AutoApplyFlow from "@/components/AutoApplyFlow";
 import CompetitorAnalysisModal from "@/components/CompetitorAnalysisModal";
 import { useSettingsPanel } from "@/components/AppMenu";
+import { useBilling } from "@/components/BillingProvider";
 import { isFlagEnabled } from "@/lib/flags";
 
 const money = (n: number) =>
@@ -91,6 +92,17 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   // modal from the award-history section, never runs any analysis.
   const [competitorOpen, setCompetitorOpen] = useState(false);
   const { openSettings } = useSettingsPanel();
+
+  // FE-07: the mock billing tier can unlock the padlocked previews — but only
+  // when the left_sidebar flag is on (that's the only surface that can change
+  // the tier). Gating the unlock behind the flag guarantees flag-OFF is
+  // byte-for-byte today's behavior: `sidebar` is false, so both stay locked
+  // regardless of any stored tier. Clicking still opens the SAME stub flow —
+  // this only changes the lock glyph + hint copy, never what the buttons do.
+  const sidebar = isFlagEnabled("left_sidebar");
+  const { features } = useBilling();
+  const autoApplyUnlocked = sidebar && features.autoApply;
+  const competitorUnlocked = sidebar && features.competitor;
 
   const spine = TIER_COLOR[m.tier] ?? TIER_COLOR.none;
   const color = TIER_TEXT[m.tier] ?? TIER_TEXT.none;
@@ -272,10 +284,12 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           aria-haspopup="dialog"
           className={autoApplyBtnClass}
         >
-          <LockIcon className="h-3 w-3" />
+          {!autoApplyUnlocked && <LockIcon className="h-3 w-3" />}
           Auto Apply
         </button>
-        <span className={autoApplyHintClass}>Pro feature &middot; not available yet</span>
+        <span className={autoApplyHintClass}>
+          {autoApplyUnlocked ? "Included in your plan (preview)" : <>Pro feature &middot; not available yet</>}
+        </span>
       </div>
 
       {autoApplyOpen &&
@@ -336,10 +350,12 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                   aria-haspopup="dialog"
                   className={competitorBtnClass}
                 >
-                  <LockIcon className="h-3 w-3" />
+                  {!competitorUnlocked && <LockIcon className="h-3 w-3" />}
                   Analyze competing companies
                 </button>
-                <span className={competitorHintClass}>Pro feature &middot; not available yet</span>
+                <span className={competitorHintClass}>
+                  {competitorUnlocked ? "Included in your plan (preview)" : <>Pro feature &middot; not available yet</>}
+                </span>
               </div>
 
               <div className="overflow-x-auto">

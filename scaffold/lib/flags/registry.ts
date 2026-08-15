@@ -34,7 +34,8 @@ export type FlagName =
   | "r9_0_mockauth"
   | "r9_supabase_auth"
   | "r10_analytics"
-  | "r4b_cost_debug";
+  | "r4b_cost_debug"
+  | "left_sidebar";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -128,5 +129,13 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "Attach a per-search cost/latency breakdown to the API response for a debug/admin view. " +
       "Cost figures must never reach the end-user UI without this flag.",
     envVar: "NEXT_PUBLIC_FLAG_R4B_COST_DEBUG",
+  },
+  left_sidebar: {
+    name: "left_sidebar",
+    requirement: "FE-07",
+    description:
+      "Left slide-out drawer (settings/grants/descriptions/account/mock-billing) replacing the " +
+      "hamburger dropdown. Local-only; gates nothing server-side; billing is a labeled mock.",
+    envVar: "NEXT_PUBLIC_FLAG_LEFT_SIDEBAR",
   },
 };

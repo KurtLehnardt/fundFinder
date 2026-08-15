@@ -25,6 +25,11 @@ import {
   type Entitlements,
   type SubscriptionTier,
 } from "../contracts/entitlements";
+import {
+  billingFeatures,
+  getBillingTier,
+  type BillingTier,
+} from "../billing/mockBilling";
 
 /**
  * The tier this stub always reports. Free by default — matching a signed-out /
@@ -49,23 +54,62 @@ export interface EntitlementsView {
    * never to allow or block any real action.
    */
   assistedApplication: boolean;
+  /**
+   * FE-07 additive fields — the locally-selected MOCK billing tier and the
+   * feature bundle it advertises. These drive the sidebar's live padlock
+   * framing (Auto Apply / competitor analysis). Unlike the legacy `tier`
+   * field (2-tier CON-01 contract), `billingTier` carries the true 3-tier
+   * mock value, so "max" is distinguishable from "pro" here. Still framing
+   * only — gates nothing, charges nothing.
+   */
+  billingTier: BillingTier;
+  autoApplyEnabled: boolean;
+  competitorEnabled: boolean;
+  autoApplyLimitPerMonth: number | null;
 }
 
 /** Project an `Entitlements` record down to the framing-only view. */
 export function toEntitlementsView(ent: Entitlements): EntitlementsView {
+  // `ent.tier` is the 2-tier contract value ("free"|"pro"), both valid
+  // BillingTier literals, so mirroring it into `billingTier` stays type-safe.
+  const billingTier: BillingTier = ent.tier;
   return {
     tier: ent.tier,
     isPro: ent.tier === "pro",
     features: ent.features,
     assistedApplication: ent.features.assisted_application,
+    billingTier,
+    autoApplyEnabled: ent.features.assisted_application,
+    competitorEnabled: ent.features.competitor_intelligence,
+    autoApplyLimitPerMonth: ent.features.assisted_application ? null : 0,
   };
 }
 
 /**
- * Client hook: the current entitlement view. A stub — always the default
- * `free` tier. No React state/effect is used, so it is safe to call anywhere
- * (and testable outside React), and it can never gate anything server-side.
+ * Client hook: the current entitlement view, driven by the FE-07 local MOCK
+ * billing tier (getBillingTier(); no window / SSR -> "free"). Still a PURE
+ * function — no React state/effect — so it is safe to call anywhere (and
+ * testable outside React), and it can never gate anything server-side.
+ *
+ * The 3-tier mock is projected onto the 2-tier CON-01 contract for the legacy
+ * fields: "free" -> free (isPro/assistedApplication false); "pro" AND "max" ->
+ * pro (isPro/assistedApplication true, legacy `tier` "pro" since the contract
+ * has no "max"). The FE-07 fields below carry the true tier + per-tier limits.
  */
 export function useEntitlements(): EntitlementsView {
-  return toEntitlementsView(readEntitlements(STUB_TIER));
+  const billingTier = getBillingTier();
+  const feats = billingFeatures(billingTier);
+  // max collapses to "pro" for the legacy 2-tier contract fields only.
+  const legacyTier: SubscriptionTier = billingTier === "free" ? "free" : "pro";
+  const ent = readEntitlements(legacyTier);
+  return {
+    tier: legacyTier,
+    isPro: legacyTier === "pro",
+    features: ent.features,
+    assistedApplication: ent.features.assisted_application,
+    billingTier,
+    autoApplyEnabled: feats.autoApply,
+    competitorEnabled: feats.competitor,
+    autoApplyLimitPerMonth: feats.autoApplyLimitPerMonth,
+  };
 }

@@ -44,6 +44,7 @@ describe("FLAG_REGISTRY", () => {
       "r9_supabase_auth",
       "r10_analytics",
       "r4b_cost_debug",
+      "left_sidebar",
     ];
     assert.deepEqual(Object.keys(FLAG_REGISTRY).sort(), expected.slice().sort());
   });

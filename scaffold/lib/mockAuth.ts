@@ -20,6 +20,12 @@ export const STORAGE_KEYS = {
   consent: 'ff.consent.v1',
   runs: 'ff.runs.v1',
   autoApply: 'ff.autoapply.v1',
+  // FE-07 — left-sidebar local stores. All client-only; clearAllLocalData()
+  // below already wipes every value in STORAGE_KEYS, so "Delete my data"
+  // covers these too without any extra wiring.
+  grants: 'ff.grants.v1',
+  descriptions: 'ff.descriptions.v1',
+  billing: 'ff.billing.v1',
 } as const;
 
 export type MockUser = {
