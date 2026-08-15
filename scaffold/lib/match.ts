@@ -1,6 +1,9 @@
 import { embed, cosine } from "./embed";
 import { extractProfile, explainMatches, explainWeakField } from "./claude";
 import type { Opportunity, OpportunityMap, StartupProfile, Match, Tier, AwardHistory } from "./types";
+import { screen } from "./eligibility/screen";
+import { annotateFreshness } from "./eligibility/freshness";
+import { toCompanyProfile, toScreenableOpportunity } from "./eligibility/bridge";
 import corpus from "@/data/opportunities.json";
 import awards from "@/data/awards.json";
 
@@ -126,6 +129,25 @@ export async function buildOpportunityMap(
     .filter(Boolean) as Match[];
 
   matches.sort((a, b) => b.score - a.score);
+
+  // R8 / ELG-04: attach a REAL eligibility determination to each match. This is
+  // cheap pure logic (no LLM, no network), so it always runs — no flag read here
+  // (the flag gates only the DISPLAY, in OpportunityMap). The v1 profile is
+  // bridged to the CompanyProfile screen() reads, mapping only genuinely-known
+  // facts and leaving every unknown gate unset; per-opp rules are empty (the v1
+  // corpus has only free-text eligibility), so the universal overlay drives the
+  // buckets. DEFENSIVE: a screening error must NEVER break the search — each
+  // screen() is wrapped, and a failure simply omits the field for that match.
+  const companyProfile = toCompanyProfile(profile);
+  for (const m of matches) {
+    try {
+      const determination = screen(companyProfile, toScreenableOpportunity(m.opportunity));
+      m.eligibility = annotateFreshness(determination);
+    } catch {
+      // Screening failed for this one match — omit `eligibility`, keep going.
+    }
+  }
+  step({ key: "eligibility", label: "Checking eligibility", pct: 94 });
 
   const strong = matches.filter((m) => m.score >= CALIBRATION.scoreFloor);
 
