@@ -6,6 +6,7 @@ import type { OpportunityMap as MapT } from "@/lib/types";
 import AppMenu from "@/components/AppMenu";
 import { isFlagEnabled } from "@/lib/flags";
 import { SidebarProvider, useSidebar } from "@/components/SidebarProvider";
+import { SIDEBAR_COLLAPSED_PEEK } from "@/lib/sidebar/sidebarPrefs";
 import WelcomeTour from "@/components/WelcomeTour";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 import { latestRun, saveRun } from "@/lib/runs/runsStore";
@@ -56,7 +57,7 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   // padding only applies >= md (globals.css); during a resize drag we drop the
   // transition so the column tracks the pointer instead of lagging behind it.
   const shiftStyle: CSSProperties | undefined = sidebarOn
-    ? ({ ["--app-sidebar-offset"]: `${expanded ? width : 0}px` } as CSSProperties)
+    ? ({ ["--app-sidebar-offset"]: `${expanded ? width : SIDEBAR_COLLAPSED_PEEK}px` } as CSSProperties)
     : undefined;
   const mainClass = [
     "mx-auto min-h-screen max-w-4xl bg-canvas px-6 py-14 text-foreground sm:py-20",
@@ -117,9 +118,13 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
       {/* Split-and-stagger hero entrance (polish): eyebrow → headline → sub
           rise in sequence on first load. Reduced-motion disables it globally. */}
       <header className="stagger mb-12">
-        <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
-          Federal funding intelligence
-        </p>
+        {/* Hero banner (replaces the eyebrow): larger, centered above the headline.
+            Navy-on-transparent → white in dark mode via the filter. */}
+        <img
+          src="/brand/logo-banner.png"
+          alt="Granted"
+          className="mx-auto h-20 w-auto select-none dark:brightness-0 dark:invert sm:h-24"
+        />
         <h1 className="mt-4 max-w-2xl text-balance font-display text-[40px] font-bold leading-[1.08] text-structure-on-canvas sm:text-[52px]">
           Grant funds are waiting<br />Let's find your match
         </h1>
