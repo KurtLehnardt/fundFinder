@@ -1,4 +1,30 @@
-export type Tier = "likely" | "verify" | "adjacent" | "none";
+/**
+ * lib/types.ts — v1 public type surface, now backed by the §3 contracts.
+ *
+ * CON-01 migrated the v1 ad-hoc types into `lib/contracts/` (zod schema +
+ * inferred type per §3). This file now RE-EXPORTS those contract types so
+ * `lib/match.ts`, `lib/claude.ts`, and `components/*` keep importing from
+ * `@/lib/types` unchanged.
+ *
+ * Two presentational constants (`TIER_LABEL`, `TIER_COLOR`) stay here rather
+ * than in `lib/contracts/`: they hold raw hex, and CON-01 forbids design values
+ * in the contracts module (that is CON-02). Keeping them here is the minimal,
+ * non-breaking home for them until the design-token contract lands.
+ */
+
+import type { Tier } from "./contracts";
+
+// Re-export the formalized v1 types (and the richer §3 Opportunity superset)
+// from the contracts barrel. Same names the v1 code already imports.
+export type {
+  Tier,
+  StartupProfile,
+  Opportunity,
+  AwardHistory,
+  CriterionCheck,
+  Match,
+  OpportunityMap,
+} from "./contracts";
 
 export const TIER_LABEL: Record<Tier, string> = {
   likely: "Likely Fit",
@@ -13,95 +39,3 @@ export const TIER_COLOR: Record<Tier, string> = {
   adjacent: "#C25A2B",
   none: "#6B7280",
 };
-
-/** A founder's company, extracted from natural language. */
-export interface StartupProfile {
-  description: string;
-  industry?: string;
-  technology?: string;
-  location?: string;
-  employees?: number;
-  revenue?: string;
-  fundingStage?: string;
-  capitalRaised?: string;
-  rdActivities?: string;
-  productMaturity?: string;
-  targetCustomers?: string;
-  capitalRequirement?: string;
-  useOfFunds?: string;
-  /** Government-vocabulary terms expanded from the founder's own words. */
-  expandedTerms?: string[];
-  naicsGuesses?: string[];
-}
-
-/** One normalized opportunity, whatever source it came from. */
-export interface Opportunity {
-  id: string;
-  source: "grants.gov" | "sbir" | "assistance-listings" | "sam-contracts";
-  kind: "grant" | "rd" | "assistance" | "procurement";
-  program: string;
-  agency: string;
-  description: string;
-  eligibility?: string;
-  fundingLow?: number;
-  fundingHigh?: number;
-  deadline?: string;
-  forecasted?: boolean;
-  industryTags?: string[];
-  geography?: string;
-  url?: string;
-  embedding?: number[];
-}
-
-/** Historical award intelligence attached to an opportunity. */
-export interface AwardHistory {
-  similarCompanies: number;
-  totalAwarded: number;
-  medianAward: number;
-  inState: number;
-  inVertical: number;
-  recipients: Array<{
-    company: string;
-    program: string;
-    agency: string;
-    amount: number;
-    year: number;
-  }>;
-}
-
-export interface CriterionCheck {
-  label: string;
-  met: boolean;
-  note?: string;
-}
-
-export interface Match {
-  opportunity: Opportunity;
-  tier: Tier;
-  score: number;
-  criteria: CriterionCheck[];
-  whyFit: string;
-  whyIneligible: string;
-  whatToVerify: string;
-  whatToDoNext: string;
-  history?: AwardHistory;
-}
-
-export interface OpportunityMap {
-  profile: StartupProfile;
-  followUps: string[];
-  summary: {
-    highPotential: number;
-    fundingIdentified: number;
-    agencies: number;
-    closingIn90Days: number;
-  };
-  matches: Match[];
-  /** Set when nothing clears the bar. This is a finding, not a failure. */
-  weakFieldFinding?: {
-    headline: string;
-    reasoning: string;
-    redirects: Array<{ label: string; why: string }>;
-  };
-  agencyIntelligence: Array<{ agency: string; why: string; opportunityCount: number }>;
-}

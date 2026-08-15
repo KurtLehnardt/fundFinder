@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:contracts": "node --import tsx --test \"lib/contracts/__tests__/*.test.ts\"",
     "data:fetch": "node scripts/1-fetch.mjs",
     "data:normalize": "node scripts/2-normalize.mjs",
     "data:embed": "node scripts/3-embed.mjs",
@@ -17,7 +19,8 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "next": "14.2.15",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22",
@@ -26,6 +29,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.3"
   }
 }
