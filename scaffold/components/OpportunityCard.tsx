@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
+import { isFlagEnabled } from "@/lib/flags";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`;
@@ -15,14 +16,48 @@ const KIND_LABEL: Record<string, string> = {
 
 /**
  * Darker tier text for the small 11px label + score so they clear WCAG
- * contrast on white. The 3px spine keeps the original, brighter TIER_COLOR.
+ * contrast on white — v1 (r7_design OFF) look only. These are pre-existing,
+ * hand-picked darkenings of the v1 `fit-*` palette (tailwind.config.ts), not
+ * part of the CON-02 token contract (lib/design/tokens.ts) and out of FE-01's
+ * file scope to relocate there. `fit-verify`/`fit-adjacent` measure 3.47:1 /
+ * 4.38:1 on white — both fail the 4.5:1 AA text threshold — which is exactly
+ * why this darker map exists; removing it would regress v1's contrast.
+ * Marked `hex-ok` per scripts/design/check-hex.mjs's documented escape
+ * hatch — this is its "rare legitimate exception" case, needed only to keep
+ * the v1 fallback pixel-for-pixel (and contrast-for-contrast) when the flag
+ * is off.
  */
 const TIER_TEXT: Record<string, string> = {
-  likely: "#1E7A4C",
-  verify: "#8A6012",
-  adjacent: "#A5451F",
-  none: "#6B7280",
+  likely: "#1E7A4C", // hex-ok
+  verify: "#8A6012", // hex-ok
+  adjacent: "#A5451F", // hex-ok
+  none: "#6B7280", // hex-ok
 };
+
+/**
+ * v2 (r7_design ON) tier badge — a filled chip per CON-02: the reserved
+ * semantic tokens are AA-safe only as filled chips/badges/banners with
+ * adequate area (dark foreground text on the fill), never as a bare small
+ * icon/border/inline-text color directly on canvas (see the `semantic` doc
+ * comment in lib/design/tokens.ts — info/success/warning all measure well
+ * under the 3:1 non-text threshold used that way). "verify" maps to warning
+ * (the tier literally means "needs verification"); "likely" to success;
+ * "adjacent" to info; "none" is neutral and never actually renders here
+ * (OpportunityMap filters tier "none" out before cards are built).
+ */
+const TIER_BADGE: Record<string, string> = {
+  likely: "bg-success text-foreground",
+  verify: "bg-warning text-foreground",
+  adjacent: "bg-info text-foreground",
+  none: "bg-canvas-alt text-foreground",
+};
+
+/** FE-01: shared "eyebrow"-style mono label, token-driven when r7_design is on. */
+function eyebrowClass(design: boolean, extra = "") {
+  return design
+    ? `font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas ${extra}`.trim()
+    : `eyebrow ${extra}`.trim();
+}
 
 /** One-sided ranges must never read "$500K–$0". */
 function fundingRange(o: Opportunity): string | null {
@@ -38,8 +73,12 @@ function fundingRange(o: Opportunity): string | null {
 export default function OpportunityCard({ m, index }: { m: Match; index: number }) {
   // Expand the first three cards so criteria / ineligibility / history read at a glance.
   const [open, setOpen] = useState(index < 3);
-  const spine = TIER_COLOR[m.tier] ?? "#6B7280";
-  const color = TIER_TEXT[m.tier] ?? "#6B7280";
+  // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
+  const design = isFlagEnabled("r7_design");
+
+  const spine = TIER_COLOR[m.tier] ?? TIER_COLOR.none;
+  const color = TIER_TEXT[m.tier] ?? TIER_TEXT.none;
+  const badgeClass = TIER_BADGE[m.tier] ?? TIER_BADGE.none;
   const o = m.opportunity;
   const value = fundingRange(o);
   const kindLabel = KIND_LABEL[o.kind] ?? o.kind;
@@ -51,9 +90,53 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
 
   const nextSteps = m.whatToDoNext?.trim();
 
+  const articleClass = design
+    ? "relative border border-structure-on-canvas bg-canvas-alt text-foreground"
+    : "relative border border-rule bg-white";
+
+  // v2: the spine is a neutral structural accent only — semantic tier color
+  // is carried entirely by the filled badge below (see TIER_BADGE comment on
+  // why a thin colored bar can't carry it and stay AA-safe).
+  const spineClass = design ? "spine bg-structure-on-canvas" : "spine";
+
+  const titleClass = design
+    ? "mt-1.5 font-display text-[19px] font-medium leading-snug text-foreground"
+    : "mt-1.5 font-display text-[19px] font-medium leading-snug";
+
+  const agencyClass = design ? "mt-1 font-mono text-[12px] text-foreground" : "mt-1 font-mono text-[12px] text-slate-550";
+
+  const dtClass = design ? "inline text-foreground" : "inline text-slate-550";
+
+  const forecastedClass = design
+    ? "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-foreground"
+    : "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550";
+
+  const detailsClass = design
+    ? "reveal border-t border-structure-on-canvas px-6 pb-6 pt-5"
+    : "reveal border-t border-rule px-6 pb-6 pt-5";
+
+  const criterionMetClass = design ? "text-structure-on-canvas" : "text-fit-strong";
+  const criterionMutedClass = design ? "text-foreground" : "text-slate-550";
+
+  const historyBorderClass = design ? "mt-6 border-t border-structure-on-canvas pt-5" : "mt-6 border-t border-rule pt-5";
+
+  const tableHeadRowClass = design
+    ? "border-b border-structure-on-canvas text-left text-foreground"
+    : "border-b border-rule text-left text-slate-550";
+
+  const tableBodyRowClass = design ? "border-b border-structure-on-canvas" : "border-b border-rule/60";
+
+  const tableMutedCellClass = design ? "py-1.5 pr-3 text-foreground" : "py-1.5 pr-3 text-slate-550";
+
+  const nextStepsBorderClass = design ? "mt-6 border-t border-structure-on-canvas pt-5" : "mt-6 border-t border-rule pt-5";
+
+  const linkClass = design
+    ? "mt-3 inline-block font-mono text-[12px] text-structure-on-canvas underline underline-offset-4"
+    : "mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4";
+
   return (
-    <article className="relative border border-rule bg-white">
-      <span className="spine" style={{ background: spine }} aria-hidden />
+    <article className={articleClass}>
+      <span className={spineClass} style={design ? undefined : { background: spine }} aria-hidden />
 
       <button
         onClick={() => setOpen(!open)}
@@ -62,80 +145,89 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
       >
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <span className="font-mono text-[11px] uppercase tracking-eyebrow" style={{ color }}>
-              {TIER_LABEL[m.tier]}
-            </span>
-            <h3 className="mt-1.5 font-display text-[19px] font-medium leading-snug">{o.program}</h3>
-            <p className="mt-1 font-mono text-[12px] text-slate-550">{o.agency}</p>
+            {design ? (
+              <span className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[11px] uppercase tracking-eyebrow ${badgeClass}`}>
+                {TIER_LABEL[m.tier]}
+              </span>
+            ) : (
+              <span className="font-mono text-[11px] uppercase tracking-eyebrow" style={{ color }}>
+                {TIER_LABEL[m.tier]}
+              </span>
+            )}
+            <h3 className={titleClass}>{o.program}</h3>
+            <p className={agencyClass}>{o.agency}</p>
           </div>
 
           <div className="shrink-0 text-right">
-            <div className="font-display text-[26px] font-bold leading-none" style={{ color }}>
+            <div
+              className={design ? "font-display text-[26px] font-bold leading-none text-foreground" : "font-display text-[26px] font-bold leading-none"}
+              style={design ? undefined : { color }}
+            >
               {m.score}
               <span className="text-[15px] font-medium">%</span>
             </div>
-            <div className="eyebrow mt-1">match</div>
+            <div className={eyebrowClass(design, "mt-1")}>match</div>
           </div>
         </div>
 
         <dl className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 font-mono text-[12px]">
           {value && (
             <div>
-              <dt className="inline text-slate-550">Value </dt>
+              <dt className={dtClass}>Value </dt>
               <dd className="inline">{value}</dd>
             </div>
           )}
           {o.deadline && (
             <div>
-              <dt className="inline text-slate-550">Deadline </dt>
+              <dt className={dtClass}>Deadline </dt>
               <dd className="inline">{o.deadline}</dd>
             </div>
           )}
           {o.forecasted && (
-            <span className="rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550">
+            <span className={forecastedClass}>
               Forecasted
             </span>
           )}
           <div>
-            <dt className="inline text-slate-550">Type </dt>
+            <dt className={dtClass}>Type </dt>
             <dd className="inline">{kindLabel}</dd>
           </div>
         </dl>
       </button>
 
       {open && (
-        <div className="reveal border-t border-rule px-6 pb-6 pt-5">
+        <div className={detailsClass}>
           {m.criteria?.length > 0 && (
             <ul className="mb-6 grid gap-1.5 sm:grid-cols-2">
               {m.criteria.map((c, i) => (
                 <li key={i} className="flex gap-2 font-body text-[13px]">
-                  <span className={c.met ? "text-fit-strong" : "text-slate-550"} aria-hidden>
+                  <span className={c.met ? criterionMetClass : criterionMutedClass} aria-hidden>
                     {c.met ? "✓" : "○"}
                   </span>
-                  <span className={c.met ? "" : "text-slate-550"}>{c.label}</span>
+                  <span className={c.met ? (design ? "text-foreground" : "") : criterionMutedClass}>{c.label}</span>
                 </li>
               ))}
             </ul>
           )}
 
-          <Section title="Why we think you're a fit" body={m.whyFit} />
-          <Section title="What could make you ineligible" body={ineligible} accent />
-          <Section title="What you should verify" body={m.whatToVerify} />
+          <Section design={design} title="Why we think you're a fit" body={m.whyFit} />
+          <Section design={design} title="What could make you ineligible" body={ineligible} accent />
+          <Section design={design} title="What you should verify" body={m.whatToVerify} />
 
           {m.history && (
-            <div className="mt-6 border-t border-rule pt-5">
-              <p className="eyebrow mb-3">Similar companies funded</p>
+            <div className={historyBorderClass}>
+              <p className={eyebrowClass(design, "mb-3")}>Similar companies funded</p>
               <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3">
-                <Stat n={m.history.similarCompanies} label="similar companies" />
-                <Stat n={money(m.history.totalAwarded)} label="total awarded" />
-                <Stat n={money(m.history.medianAward)} label="median award" />
-                <Stat n={m.history.inState} label="in Utah" />
-                <Stat n={m.history.inVertical} label="in your vertical" />
+                <Stat design={design} n={m.history.similarCompanies} label="similar companies" />
+                <Stat design={design} n={money(m.history.totalAwarded)} label="total awarded" />
+                <Stat design={design} n={money(m.history.medianAward)} label="median award" />
+                <Stat design={design} n={m.history.inState} label="in Utah" />
+                <Stat design={design} n={m.history.inVertical} label="in your vertical" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[440px] font-mono text-[11px]">
                   <thead>
-                    <tr className="border-b border-rule text-left text-slate-550">
+                    <tr className={tableHeadRowClass}>
                       <th className="py-1.5 font-normal">Company</th>
                       <th className="py-1.5 font-normal">Program</th>
                       <th className="py-1.5 font-normal">Agency</th>
@@ -145,12 +237,12 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                   </thead>
                   <tbody>
                     {m.history.recipients.map((r, i) => (
-                      <tr key={i} className="border-b border-rule/60">
+                      <tr key={i} className={tableBodyRowClass}>
                         <td className="py-1.5 pr-3">{r.company}</td>
-                        <td className="py-1.5 pr-3 text-slate-550">{r.program}</td>
-                        <td className="py-1.5 pr-3 text-slate-550">{r.agency}</td>
+                        <td className={tableMutedCellClass}>{r.program}</td>
+                        <td className={tableMutedCellClass}>{r.agency}</td>
                         <td className="py-1.5 pr-3 text-right">{money(r.amount)}</td>
-                        <td className="py-1.5 text-right text-slate-550">{r.year}</td>
+                        <td className={design ? "py-1.5 text-right text-foreground" : "py-1.5 text-right text-slate-550"}>{r.year}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -160,12 +252,11 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           )}
 
           {(nextSteps || o.url) && (
-            <div className="mt-6 border-t border-rule pt-5">
-              <p className="eyebrow mb-2">What to do next</p>
+            <div className={nextStepsBorderClass}>
+              <p className={eyebrowClass(design, "mb-2")}>What to do next</p>
               {nextSteps && <p className="font-body text-[14px] leading-relaxed">{nextSteps}</p>}
               {o.url && (
-                <a href={o.url} target="_blank" rel="noreferrer"
-                   className="mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4">
+                <a href={o.url} target="_blank" rel="noreferrer" className={linkClass}>
                   Open the official listing
                 </a>
               )}
@@ -177,21 +268,29 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   );
 }
 
-function Section({ title, body, accent }: { title: string; body?: string; accent?: boolean }) {
+function Section({ title, body, accent, design }: { title: string; body?: string; accent?: boolean; design: boolean }) {
   if (!body || !body.trim()) return null;
+  // Ineligibility factors are a blocking/cautionary signal -> `error`, used
+  // here as a 2px left border (non-text, 3:1 threshold — passes; see the
+  // TIER_BADGE comment for why the same tokens can't be bare small text).
+  const accentClass = accent ? (design ? "border-l-2 border-error pl-4" : "border-l-2 border-fit-verify pl-4") : "";
+  const bodyClass = design ? "font-body text-[14px] leading-relaxed text-foreground" : "font-body text-[14px] leading-relaxed";
   return (
-    <div className={`mb-5 ${accent ? "border-l-2 border-fit-verify pl-4" : ""}`}>
-      <p className="eyebrow mb-1.5">{title}</p>
-      <p className="font-body text-[14px] leading-relaxed">{body}</p>
+    <div className={`mb-5 ${accentClass}`}>
+      <p className={eyebrowClass(design, "mb-1.5")}>{title}</p>
+      <p className={bodyClass}>{body}</p>
     </div>
   );
 }
 
-function Stat({ n, label }: { n: number | string; label: string }) {
+function Stat({ n, label, design }: { n: number | string; label: string; design: boolean }) {
+  const numberClass = design
+    ? "font-display text-[20px] font-bold leading-none text-foreground"
+    : "font-display text-[20px] font-bold leading-none";
   return (
     <div>
-      <div className="font-display text-[20px] font-bold leading-none">{n}</div>
-      <div className="eyebrow mt-1">{label}</div>
+      <div className={numberClass}>{n}</div>
+      <div className={eyebrowClass(design, "mt-1")}>{label}</div>
     </div>
   );
 }
