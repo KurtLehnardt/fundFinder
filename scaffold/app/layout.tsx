@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter, IBM_Plex_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", weight: ["500", "700"] });
@@ -14,7 +15,19 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body className="font-body antialiased">{children}</body>
+      <body className="font-body antialiased">
+        {/*
+          AuthProvider always wraps the app, flag or no flag. It is a passive
+          React context — no network calls, no redirects, no rendered UI of its
+          own — so mounting it unconditionally does not change v1 behavior.
+          Whether any *visible* R9.0 surface (sign-in link, avatar, consent,
+          delete-my-data) appears is decided per-component behind the
+          `r9_0_mockauth` flag (see app/page.tsx, components/IntakeForm.tsx).
+          Keeping the provider itself unconditional also means the real OAuth
+          swap at R9 only has to change what's inside this file, not add it.
+        */}
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

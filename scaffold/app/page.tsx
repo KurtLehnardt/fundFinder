@@ -1,12 +1,22 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
 import type { OpportunityMap as MapT } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
+import { useAuth } from "@/components/AuthProvider";
+import { UserMenu } from "@/components/UserMenu";
 
 export default function Home() {
   const [map, setMap] = useState<MapT | null>(null);
+
+  // r9_0_mockauth (CON-03): flag off -> v1 path unchanged, no auth UI at all.
+  // AuthProvider always wraps the app (app/layout.tsx), so this hook is always
+  // safe to call; only the *rendering* of any auth surface is flag-gated.
+  const mockAuthOn = isFlagEnabled("r9_0_mockauth");
+  const { user, loading } = useAuth();
+
   // FE-01: gates the CON-02 USWDS restyle. Off = v1 look (unchanged), on =
   // 60/30/10 design-token look. One-flag revert — see lib/flags/registry.ts.
   const design = isFlagEnabled("r7_design");
@@ -29,6 +39,21 @@ export default function Home() {
 
   return (
     <main className={mainClass}>
+      {mockAuthOn && !loading && (
+        <div className="mb-6 flex justify-end">
+          {user ? (
+            <UserMenu />
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
+      )}
+
       <header className="mb-12">
         <p className={eyebrowClass}>Federal funding intelligence</p>
         <h1 className={h1Class}>
