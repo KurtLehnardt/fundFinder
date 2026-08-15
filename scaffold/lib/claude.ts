@@ -136,8 +136,18 @@ RULES THAT MATTER MORE THAN COVERAGE:
     return parseJson<Assessment[]>(text);
   };
 
-  const batchResults = await Promise.all(groups.map(scoreGroup));
-  return batchResults.flat();
+  // Fault-tolerant: keep whatever batches succeed. One batch throwing or
+  // emitting non-JSON must not discard the others (and their spend). Only fail
+  // the whole request if every batch fails.
+  const settled = await Promise.allSettled(groups.map(scoreGroup));
+  const ok = settled
+    .filter((s): s is PromiseFulfilledResult<Assessment[]> => s.status === "fulfilled")
+    .map((s) => s.value);
+  if (ok.length === 0) {
+    const firstErr = settled.find((s) => s.status === "rejected") as PromiseRejectedResult | undefined;
+    throw new Error(`All scoring batches failed: ${firstErr?.reason?.message ?? "unknown error"}`);
+  }
+  return ok.flat();
 }
 
 /**
