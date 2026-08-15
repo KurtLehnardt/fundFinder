@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import {
   getAutoApplyRequirements,
   setAutoApplyRequirements,
@@ -20,7 +19,8 @@ import { useDialogA11y } from "@/components/useDialogA11y";
  * else, since it lives under the same STORAGE_KEYS map.
  */
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: CON-02 USWDS 60/30/10 restyle is now the DEFAULT.
+  const design = true;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
@@ -39,8 +39,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Modal: elevated surface (rounded + overlay shadow) with a definition border
+  // over the scrim.
   const panelClass = design
-    ? "relative max-h-[85vh] w-full max-w-md overflow-y-auto border border-structure-on-canvas bg-canvas p-6 text-foreground"
+    ? "relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border border-structure-on-canvas bg-canvas p-6 text-foreground shadow-overlay"
     : "relative max-h-[85vh] w-full max-w-md overflow-y-auto border border-rule bg-white p-6 text-ink";
 
   const eyebrowClass = design
@@ -48,11 +50,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
     : "eyebrow";
 
   const titleClass = design
-    ? "mt-2 font-display text-[22px] font-bold leading-snug text-foreground"
+    ? "mt-2 text-balance font-display text-[22px] font-bold leading-snug text-foreground"
     : "mt-2 font-display text-[22px] font-bold leading-snug";
 
   const noteClass = design
-    ? "mt-2 font-body text-[12px] leading-relaxed text-foreground"
+    ? "mt-2 text-pretty font-body text-[12px] leading-relaxed text-foreground"
     : "mt-2 font-body text-[12px] leading-relaxed text-slate-550";
 
   const legendClass = design
@@ -63,22 +65,23 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
     ? "mt-5 border-t border-structure-on-canvas pt-4 first:mt-4 first:border-t-0 first:pt-0"
     : "mt-5 border-t border-rule pt-4 first:mt-4 first:border-t-0 first:pt-0";
 
+  // Inputs get a visible focus ring (was missing entirely).
   const inputClass = design
-    ? "mt-1.5 w-full rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-body text-[13px] text-foreground"
-    : "mt-1.5 w-full rounded-sm border border-rule bg-white px-2.5 py-1.5 font-body text-[13px] text-ink";
+    ? "mt-1.5 w-full rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-body text-[13px] text-foreground outline-none transition focus:border-structure-on-canvas focus:ring-2 focus:ring-structure-on-canvas"
+    : "mt-1.5 w-full rounded-sm border border-rule bg-white px-2.5 py-1.5 font-body text-[13px] text-ink outline-none focus:border-federal focus:ring-2 focus:ring-federal/15";
 
   const labelTextClass = design ? "font-body text-[13px] text-foreground" : "font-body text-[13px] text-ink";
 
   const closeIconBtnClass = design
-    ? "absolute right-4 top-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "absolute right-3 top-3 rounded-sm p-1 text-foreground transition hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "absolute right-4 top-4 text-slate-550 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const saveBtnClass = design
-    ? "rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "rounded-sm border border-federal px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const closeTextBtnClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 transition hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const savedMsgClass = design

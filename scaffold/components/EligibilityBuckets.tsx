@@ -1,5 +1,4 @@
 "use client";
-import { isFlagEnabled } from "@/lib/flags";
 import type {
   EligibilityBucket,
   EligibilityDetermination,
@@ -64,8 +63,10 @@ function eyebrowClass(design: boolean, extra = "") {
 }
 
 export default function EligibilityBuckets({ items }: { items: EligibilityItem[] }) {
-  // FE-01 pattern: r7_design gates the CON-02 token restyle; v1 fallback stays fully supported.
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
+  // on this A/B branch (previously gated behind r7_design). v1 fallback branches
+  // are retained but unreachable.
+  const design = true;
 
   const groups = new Map<EligibilityBucket, EligibilityItem[]>();
   for (const item of items ?? []) {
@@ -90,13 +91,13 @@ export default function EligibilityBuckets({ items }: { items: EligibilityItem[]
         const group = groups.get(bucket)!;
         const meta = BUCKET_META[bucket];
         const headingClass = design
-          ? "font-display text-[22px] font-bold leading-tight text-foreground"
+          ? "text-balance font-display text-[22px] font-bold leading-tight text-foreground"
           : "font-display text-[22px] font-bold leading-tight text-ink";
         const countClass = design
-          ? "ml-2 font-mono text-[13px] font-normal text-foreground"
+          ? "ml-2 font-mono text-[13px] font-normal tabular-nums text-foreground"
           : "ml-2 font-mono text-[13px] font-normal text-slate-550";
         const introClass = design
-          ? "mt-1 font-body text-[13px] leading-relaxed text-foreground"
+          ? "mt-1 text-pretty font-body text-[13px] leading-relaxed text-foreground"
           : "mt-1 font-body text-[13px] leading-relaxed text-slate-550";
 
         return (
@@ -176,15 +177,15 @@ function BucketCard({ item, design }: { item: EligibilityItem; design: boolean }
   const bucket = determination.bucket;
 
   const cardClass = design
-    ? "relative border border-structure-on-canvas bg-canvas-alt px-6 py-5 text-foreground"
+    ? "relative overflow-hidden rounded-lg bg-canvas-alt px-6 py-5 text-foreground shadow-card"
     : "relative border border-rule bg-white px-6 py-5";
 
   const titleClass = design
-    ? "mt-1.5 font-display text-[17px] font-medium leading-snug text-foreground"
+    ? "mt-1.5 text-balance font-display text-[17px] font-medium leading-snug text-foreground"
     : "mt-1.5 font-display text-[17px] font-medium leading-snug";
 
   const agencyClass = design
-    ? "mt-0.5 font-mono text-[12px] text-foreground"
+    ? "mt-0.5 text-pretty font-mono text-[12px] text-foreground"
     : "mt-0.5 font-mono text-[12px] text-slate-550";
 
   return (
@@ -262,7 +263,7 @@ function RequiredStepLine({ step, design }: { step: RequiredStep; design: boolea
       : null;
 
   const chipClass = design
-    ? "inline-block shrink-0 rounded-sm bg-info px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow text-foreground"
+    ? "inline-block shrink-0 rounded-sm bg-info px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow tabular-nums text-foreground"
     : "inline-block shrink-0 rounded-sm border border-rule px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow text-slate-550";
 
   const stepTextClass = design

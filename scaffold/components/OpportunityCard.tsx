@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
-import { isFlagEnabled } from "@/lib/flags";
 import AutoApplyModal from "@/components/AutoApplyModal";
 import { useSettingsPanel } from "@/components/AppMenu";
 
@@ -75,8 +74,10 @@ function fundingRange(o: Opportunity): string | null {
 export default function OpportunityCard({ m, index }: { m: Match; index: number }) {
   // Expand the first three cards so criteria / ineligibility / history read at a glance.
   const [open, setOpen] = useState(index < 3);
-  // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the
+  // DEFAULT on this A/B branch (previously gated behind r7_design). v1 fallback
+  // branches are retained but unreachable.
+  const design = true;
   // FE-06: locked "Auto Apply" stub — opens the Pro-upsell modal, never submits anything.
   const [autoApplyOpen, setAutoApplyOpen] = useState(false);
   const { openSettings } = useSettingsPanel();
@@ -95,8 +96,12 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
 
   const nextSteps = m.whatToDoNext?.trim();
 
+  // Polish: the card is an elevated surface (rounded + layered shadow, lifting
+  // slightly on hover) rather than a hard navy border. overflow-hidden clips the
+  // left tier spine to the rounded corners; the interior border-t dividers stay
+  // as structural separators. transition-shadow names only the animated prop.
   const articleClass = design
-    ? "relative border border-structure-on-canvas bg-canvas-alt text-foreground"
+    ? "relative overflow-hidden rounded-lg bg-canvas-alt text-foreground shadow-card transition-shadow duration-200 ease-out hover:shadow-card-hover"
     : "relative border border-rule bg-white";
 
   // v2: the spine is a neutral structural accent only — semantic tier color
@@ -105,10 +110,10 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const spineClass = design ? "spine bg-structure-on-canvas" : "spine";
 
   const titleClass = design
-    ? "mt-1.5 font-display text-[19px] font-medium leading-snug text-foreground"
+    ? "mt-1.5 text-balance font-display text-[19px] font-medium leading-snug text-foreground"
     : "mt-1.5 font-display text-[19px] font-medium leading-snug";
 
-  const agencyClass = design ? "mt-1 font-mono text-[12px] text-foreground" : "mt-1 font-mono text-[12px] text-slate-550";
+  const agencyClass = design ? "mt-1 text-pretty font-mono text-[12px] text-foreground" : "mt-1 font-mono text-[12px] text-slate-550";
 
   const dtClass = design ? "inline text-foreground" : "inline text-slate-550";
 
@@ -156,8 +161,10 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
     ? "flex flex-wrap items-center gap-2 border-t border-structure-on-canvas px-6 py-3"
     : "flex flex-wrap items-center gap-2 border-t border-rule px-6 py-3";
 
+  // Polish: real hover + a 40px min hit target (dense-desktop control), plus
+  // optical padding (icon side 2px tighter than the text side).
   const autoApplyBtnClass = design
-    ? "inline-flex items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "inline-flex min-h-[40px] items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas pl-2 pr-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "inline-flex items-center gap-1.5 rounded-sm border border-rule bg-white px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const autoApplyHintClass = design
@@ -190,7 +197,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
 
           <div className="shrink-0 text-right">
             <div
-              className={design ? "font-display text-[26px] font-bold leading-none text-foreground" : "font-display text-[26px] font-bold leading-none"}
+              className={design ? "font-display text-[26px] font-bold leading-none tabular-nums text-foreground" : "font-display text-[26px] font-bold leading-none"}
               style={design ? undefined : { color }}
             >
               {m.score}
@@ -200,7 +207,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           </div>
         </div>
 
-        <dl className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 font-mono text-[12px]">
+        <dl className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 font-mono text-[12px] tabular-nums">
           {value && (
             <div>
               <dt className={dtClass}>Value </dt>
@@ -285,7 +292,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                 <Stat design={design} n={m.history.inVertical} label="in your vertical" />
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[440px] font-mono text-[11px]">
+                <table className="w-full min-w-[440px] font-mono text-[11px] tabular-nums">
                   <thead>
                     <tr className={tableHeadRowClass}>
                       <th className="py-1.5 font-normal">Company</th>
@@ -314,7 +321,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           {(nextSteps || o.url) && (
             <div className={nextStepsBorderClass}>
               <p className={eyebrowClass(design, "mb-2")}>What to do next</p>
-              {nextSteps && <p className="font-body text-[14px] leading-relaxed">{nextSteps}</p>}
+              {nextSteps && <p className="text-pretty font-body text-[14px] leading-relaxed">{nextSteps}</p>}
               {o.url && (
                 <a href={o.url} target="_blank" rel="noreferrer" className={linkClass}>
                   Open the official listing
@@ -334,7 +341,7 @@ function Section({ title, body, accent, design }: { title: string; body?: string
   // here as a 2px left border (non-text, 3:1 threshold — passes; see the
   // TIER_BADGE comment for why the same tokens can't be bare small text).
   const accentClass = accent ? (design ? "border-l-2 border-error pl-4" : "border-l-2 border-fit-verify pl-4") : "";
-  const bodyClass = design ? "font-body text-[14px] leading-relaxed text-foreground" : "font-body text-[14px] leading-relaxed";
+  const bodyClass = design ? "text-pretty font-body text-[14px] leading-relaxed text-foreground" : "font-body text-[14px] leading-relaxed";
   return (
     <div className={`mb-5 ${accentClass}`}>
       <p className={eyebrowClass(design, "mb-1.5")}>{title}</p>
@@ -364,7 +371,7 @@ function LockIcon({ className }: { className?: string }) {
 
 function Stat({ n, label, design }: { n: number | string; label: string; design: boolean }) {
   const numberClass = design
-    ? "font-display text-[20px] font-bold leading-none text-foreground"
+    ? "font-display text-[20px] font-bold leading-none tabular-nums text-foreground"
     : "font-display text-[20px] font-bold leading-none";
   return (
     <div>

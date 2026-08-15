@@ -85,14 +85,19 @@ export default function SearchProgress({
   const ss = Math.floor(elapsed % 60).toString().padStart(2, "0");
   const pct = Math.round(display);
 
+  // Polish: elevated card (fixes a broken /30 alpha border that CSS-var-backed
+  // tokens can't compute), and the progress FILL is the spec-reserved `action`
+  // green (R7.2: green = primary CTA + progress fill only). The fill animates
+  // via an interruptible width transition — never a keyframe — so a real
+  // milestone snaps up cleanly and never masks state.
   const cardClass = design
-    ? "mt-4 rounded-sm border border-structure-on-canvas/30 bg-canvas-alt px-4 py-4"
+    ? "mt-4 rounded-lg bg-canvas-alt px-4 py-4 shadow-card"
     : "mt-4 rounded-sm border border-rule bg-white px-4 py-4";
   const trackClass = design
     ? "h-2.5 w-full overflow-hidden rounded-full bg-canvas"
     : "h-2.5 w-full overflow-hidden rounded-full bg-rule/50";
   const fillClass = design
-    ? "h-full rounded-full bg-structure transition-[width] duration-700 ease-out"
+    ? "h-full rounded-full bg-action transition-[width] duration-700 ease-out"
     : "h-full rounded-full bg-federal transition-[width] duration-700 ease-out";
   const phaseClass = design
     ? "font-mono text-[12px] text-structure-on-canvas"
@@ -101,7 +106,7 @@ export default function SearchProgress({
     ? "font-mono text-[12px] tabular-nums text-foreground"
     : "font-mono text-[12px] tabular-nums text-slate-550";
   const factClass = design
-    ? "mt-3 font-body text-[13px] leading-relaxed text-foreground"
+    ? "mt-3 text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "mt-3 font-body text-[13px] leading-relaxed text-ink";
 
   return (
@@ -117,12 +122,14 @@ export default function SearchProgress({
         <div className={fillClass} style={{ width: `${pct}%` }} />
       </div>
 
-      <p key={fact} className={factClass}>
+      {/* key={fact} remounts on each rotation; `reveal` gives a gentle one-shot
+          fade-in (low-frequency, reduced-motion-safe) as facts cycle. */}
+      <p key={fact} className={`${factClass} reveal`}>
         <span className="font-mono text-[11px] uppercase tracking-eyebrow opacity-70">Did you know&nbsp;·&nbsp;</span>
         {fact}
       </p>
 
-      <p className={`mt-3 ${mutedClass}`}>
+      <p className={`mt-3 text-pretty ${mutedClass}`}>
         First-time searches read live federal data and can take up to two minutes. Hang tight.
       </p>
     </div>

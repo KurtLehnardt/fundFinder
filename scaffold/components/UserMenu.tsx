@@ -26,20 +26,22 @@ export function UserMenu() {
   return (
     <div className="flex items-center gap-3">
       {/* eslint-disable-next-line @next/next/no-img-element -- inline SVG data URI */}
+      {/* Subtle neutral image outline (pure black/white alpha, never a tinted
+          near-black) gives the avatar consistent edge depth in both themes. */}
       <img
         src={user.avatarUrl}
         alt=""
         width={32}
         height={32}
-        className="rounded-full"
+        className="rounded-full outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
       />
-      <span className="hidden text-sm font-medium text-[#212121] sm:inline">
+      <span className="hidden text-sm font-medium text-foreground sm:inline">
         {user.name}
       </span>
       <button
         type="button"
         onClick={handleSignOut}
-        className="rounded-md px-3 py-1.5 text-sm font-medium text-[#005ea2] transition-colors duration-150 hover:bg-[#ecf1f7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#005ea2] focus-visible:ring-offset-2"
+        className="inline-flex min-h-[44px] items-center rounded-md px-3 py-1.5 text-sm font-medium text-structure-on-canvas transition hover:bg-canvas-alt active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
       >
         Log out
       </button>
