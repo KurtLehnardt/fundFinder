@@ -282,11 +282,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-federal"
             />
-            <span>
-              Opt in to sharing anonymized usage data so {BRAND} can analyze usage patterns
-              and improve the product. Optional — it never changes your results. Off by
-              default, and you can turn it off anytime.
-            </span>
+            <span>Opt in to sharing anonymized usage data</span>
           </label>
           {consent.granted && consent.grantedAt && (
             <p className="mt-1.5 pl-[26px] font-mono text-[11px] text-slate-550">

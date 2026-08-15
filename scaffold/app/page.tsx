@@ -44,7 +44,7 @@ export default function Home() {
       <header className="mb-12">
         <p className={eyebrowClass}>Federal funding intelligence</p>
         <h1 className={h1Class}>
-          The money is already there.<br />Finding it is the hard part.
+          Grant funds are waiting<br />Let's find your match
         </h1>
         <p className={subClass}>
           Describe your company the way you'd describe it to another founder. We'll translate it
