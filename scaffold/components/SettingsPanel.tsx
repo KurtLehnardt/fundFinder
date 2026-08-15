@@ -70,16 +70,16 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const labelTextClass = design ? "font-body text-[13px] text-foreground" : "font-body text-[13px] text-ink";
 
   const closeIconBtnClass = design
-    ? "absolute right-4 top-4 text-foreground"
-    : "absolute right-4 top-4 text-slate-550";
+    ? "absolute right-4 top-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "absolute right-4 top-4 text-slate-550 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const saveBtnClass = design
-    ? "rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "rounded-sm border border-federal px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-federal";
+    ? "rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "rounded-sm border border-federal px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const closeTextBtnClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4"
-    : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline underline-offset-4";
+    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const savedMsgClass = design
     ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"

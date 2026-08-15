@@ -202,8 +202,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
 
   // The ONLY green surface in the whole app: primary CTA fill (R7.2's 10%).
   const primaryButtonClass = design
-    ? "rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
-    : "rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35";
+    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "min-h-[44px] rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   // FE-02 (R7.1): the sample-company picker lives below a real visual break
   // (border-t + vertical space), not inline with the CTA. It's a secondary
@@ -214,8 +214,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     : "mt-6 border-t border-rule pt-5";
 
   const sampleTriggerClass = design
-    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:cursor-not-allowed disabled:opacity-40"
-    : "min-h-[44px] rounded-sm border border-rule bg-white px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal disabled:cursor-not-allowed disabled:opacity-40";
+    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "min-h-[44px] rounded-sm border border-rule bg-white px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   // Expanded picker panel gets its own subtle background-tone shift (on top
   // of the border-t break above) so it reads as a distinct, optional area.
@@ -233,8 +233,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // (navy on r7_design, federal-blue text on v1) recolor both label and
   // blurb together, matching the required white-on-structure-fill pairing.
   const sampleItemClass = design
-    ? "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-structure-on-canvas bg-canvas px-3.5 py-2.5 text-left transition hover:bg-structure disabled:cursor-not-allowed disabled:opacity-40"
-    : "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-rule bg-paper px-3.5 py-2.5 text-left transition hover:border-federal disabled:cursor-not-allowed disabled:opacity-40";
+    ? "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-structure-on-canvas bg-canvas px-3.5 py-2.5 text-left transition hover:bg-structure disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-rule bg-paper px-3.5 py-2.5 text-left transition hover:border-federal disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const sampleItemLabelClass = design
     ? "font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas group-hover:text-token-white"
@@ -292,11 +292,11 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
             </p>
           )}
 
-          <div className="mt-3 flex items-center gap-3 pl-[26px]">
+          <div className="mt-3 flex flex-wrap items-center gap-3 pl-[26px]">
             <button
               type="button"
               onClick={handleDeleteMyData}
-              className="font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline decoration-dotted underline-offset-2 transition hover:text-federal"
+              className="font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline decoration-dotted underline-offset-2 transition hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2"
             >
               Delete my data
             </button>

@@ -346,8 +346,8 @@ function ExcludedBody({
   design: boolean;
 }) {
   const summaryClass = design
-    ? "cursor-pointer font-body text-[14px] font-medium leading-snug text-foreground"
-    : "cursor-pointer font-body text-[14px] font-medium leading-snug text-ink";
+    ? "cursor-pointer font-body text-[14px] font-medium leading-snug text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "cursor-pointer font-body text-[14px] font-medium leading-snug text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (
     <details>
@@ -457,8 +457,8 @@ function CitationNote({ citation, design }: { citation?: Citation; design: boole
     ? "mt-1 font-mono text-[11px] text-foreground"
     : "mt-1 font-mono text-[11px] text-slate-550";
   const linkClass = design
-    ? "text-structure-on-canvas underline underline-offset-4"
-    : "text-federal underline underline-offset-4";
+    ? "text-structure-on-canvas underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "text-federal underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (
     <p className={wrapClass}>

@@ -136,19 +136,29 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const nextStepsBorderClass = design ? "mt-6 border-t border-structure-on-canvas pt-5" : "mt-6 border-t border-rule pt-5";
 
   const linkClass = design
-    ? "mt-3 inline-block font-mono text-[12px] text-structure-on-canvas underline underline-offset-4"
-    : "mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4";
+    ? "mt-3 inline-block font-mono text-[12px] text-structure-on-canvas underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+
+  // Header toggle — the card's whole title row is one full-width <button>;
+  // no existing dual-class const covered it before, so the focus ring is
+  // added inline here, keyed off the same `design` flag as everything else.
+  // ring-inset (not ring-offset) — this button is flush against the card's
+  // own border on all sides, so an outside offset would bleed the ring past
+  // the card edge.
+  const headerToggleClass = design
+    ? "w-full px-6 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset"
+    : "w-full px-6 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset";
 
   // FE-06: the locked Auto Apply control is a secondary/structure affordance —
   // never bg-action (reserved for the primary CTA). Sits in its own row, own
   // <button>, outside the header's full-width toggle button (see below).
   const autoApplyRowClass = design
-    ? "flex items-center gap-2 border-t border-structure-on-canvas px-6 py-3"
-    : "flex items-center gap-2 border-t border-rule px-6 py-3";
+    ? "flex flex-wrap items-center gap-2 border-t border-structure-on-canvas px-6 py-3"
+    : "flex flex-wrap items-center gap-2 border-t border-rule px-6 py-3";
 
   const autoApplyBtnClass = design
-    ? "inline-flex items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "inline-flex items-center gap-1.5 rounded-sm border border-rule bg-white px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal";
+    ? "inline-flex items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "inline-flex items-center gap-1.5 rounded-sm border border-rule bg-white px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const autoApplyHintClass = design
     ? "font-mono text-[10px] text-foreground"
@@ -161,7 +171,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="w-full px-6 py-5 text-left"
+        className={headerToggleClass}
       >
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">

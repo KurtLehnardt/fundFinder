@@ -87,23 +87,23 @@ export default function AppMenu() {
   }, [menuOpen]);
 
   const hamburgerBtnClass = design
-    ? "rounded-sm border border-structure-on-canvas p-2 text-structure-on-canvas"
-    : "rounded-sm border border-rule bg-white p-2 text-slate-550 transition hover:border-federal hover:text-federal";
+    ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-structure-on-canvas p-2 text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-rule bg-white p-2 text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const menuClass = design
     ? "absolute right-0 top-full z-40 mt-2 w-48 border border-structure-on-canvas bg-canvas py-1 text-foreground shadow-sm"
     : "absolute right-0 top-full z-40 mt-2 w-48 border border-rule bg-white py-1 shadow-sm";
 
   const menuItemClass = design
-    ? "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-foreground hover:bg-canvas-alt"
-    : "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 hover:bg-paper";
+    ? "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-foreground hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset"
+    : "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset";
 
   const signInLinkClass = design
-    ? "rounded-sm border border-structure-on-canvas px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal";
+    ? "rounded-sm border border-structure-on-canvas px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (
-    <div className="flex items-center justify-end gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-3">
       <div ref={wrapRef} className="relative">
         <button
           type="button"
