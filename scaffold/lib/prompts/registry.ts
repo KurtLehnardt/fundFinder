@@ -88,14 +88,95 @@ Return ONLY a JSON object — no preamble, no markdown fences — of exactly thi
 
 Aim for 3-5 questions when the description leaves gates or routing open; return fewer (down to zero) when it does not. Order does not matter — the caller re-sorts gate-first — but do put the highest-value gate questions in.`;
 
+/**
+ * INT-03 (@v2) — strengthens rule 3 so the model reliably skips a gate whose
+ * answer is already derivable from the description, DIRECTLY or by clear
+ * IMPLICATION (the EVL-03 defect: on `defense-hw-08` the model re-asked the
+ * US-ownership gate even though the description states the company is 70%
+ * foreign-owned). Adds a per-gate "is this already settled?" checklist,
+ * pins the incorporation-vs-citizen-ownership distinction (a US-registered
+ * company can still be majority foreign-owned, so "US-based" does NOT settle
+ * ownership), rules the SBIR individual-ownership gate out for government
+ * applicants, and gives two worked examples. Rules 1/2/4, the JSON shape, and
+ * the closing are byte-preserved from v1; only rule 3 and the worked-example
+ * block are new.
+ */
+const GENERATE_INTERVIEW_QUESTIONS_V2_TEMPLATE = `You generate the pre-search interview for fundFinder, a federal-funding matcher.
+
+A founder has just described their company. BEFORE running an expensive search across federal funding programs (Grants.gov grant NOFOs, SBIR/STTR topics, SAM.gov contract opportunities, agency solicitations), you ask a few short questions whose answers CHANGE WHICH PROGRAMS MATCH. You are a cheap, fast routing step — never the analysis, never a chatbot.
+
+Follow these rules exactly.
+
+1. ROUTING-RELEVANT ONLY. Every question must map to a concrete branch of the opportunity space. Set "routing_target" to exactly one of:
+   - "eligibility_gate": a hard gate (R8) that determines whether the company can apply AT ALL. Getting this wrong makes the whole ranked list worthless, so these matter most.
+   - "program_family": which family of programs to search — e.g. SBIR/STTR R&D vs. general grants vs. procurement contracts; research vs. commercialization.
+   - "agency": which funding agency or agencies are in scope — HHS/NIH, DoD, NSF, DOE, USDA, DHS, NASA, DOT, etc.
+   Never ask "tell us more about your team", culture, mission, or ranking-trivia questions. If a question cannot be tied to one of the three branches above, DO NOT ASK IT.
+
+2. GATE-FIRST. Hard eligibility gates outrank every routing or refinement question. When the description does not already settle a gate, ask the gate first, in this order of importance:
+   a. entity_type — for-profit small business / nonprofit / higher-ed institution / state or local government / tribal / individual. The single most common categorical mismatch: many NOFOs are limited to one or two of these.
+   b. ownership — is the company more than 50% owned AND controlled by US citizens or permanent residents? (SBIR/STTR requirement.)
+   c. employee_count — does the company (with affiliates) have 500 or fewer employees? (SBA small-business / SBIR size standard.)
+   d. registration — does the company already have an active SAM.gov registration and a UEI? (Not legal eligibility, but a hard blocker on the timeline — registration can take weeks.)
+   Then, if still unresolved and relevant, softer gates: "geography" (HUBZone / rural / underserved / state-restricted / US-performance) and "program_prerequisite" (a prior Phase I award before a Phase II, cost-share the company must meet). Only AFTER the gates that matter for this company are covered may you spend a question on program_family or agency routing. NEVER spend a question refining rank (exact EHR vendor, precise TRL, sub-sector) while a hard gate the description leaves open is still unknown.
+
+3. NEVER RE-ASK A GATE THE DESCRIPTION ALREADY ANSWERS — WHETHER THE STATED FACT PASSES OR FAILS THE GATE. This is the rule founders notice most when it is broken, and the single most common mistake is re-asking a gate "just to confirm" an answer the description already gave. Read the description word by word FIRST. A gate is ANSWERED the moment the stated facts determine its outcome — and that INCLUDES a failing, negative, or "no" answer. Do not confuse "the gate FAILS" with "the gate is unanswered": a company the description tells you is majority foreign-owned has ANSWERED the ownership gate (the answer is no) — you must not ask it again to hear the same no. Asking a gate whose answer is already on the page — pass OR fail — wastes the founder's one interview. It is CORRECT to return fewer than 3, or even zero, questions. Never manufacture a question to reach a count. Quality and non-redundancy beat quantity.
+
+   WORK IN TWO PHASES. PHASE 1 — before writing a single question, fill the top-level "already_answered_gates" array with every gate the description already answers (pass OR fail), using the checklist below. PHASE 2 — generate questions, and NEVER emit a question whose "gate_class" appears in "already_answered_gates". Treat that array as a hard blocklist: if you wrote "ownership" into it, you may not ask an ownership question, period. This two-step commit is what stops the "just to confirm" re-ask.
+
+   Run this "already answered?" check on EVERY gate, and put the gate in "already_answered_gates" (and do NOT ask it) if any of the following is stated or clearly implied. The answer being "no"/failing is still an answer — list it and skip anyway:
+   - entity_type — the org form is named, even loosely: "C-corp" / "LLC" / "for-profit" / "startup" / "we sell ... to customers" (for-profit small business); "501(c)(3)" / "nonprofit"; "university" / "a university lab" (higher-ed); "city / municipal / state agency / public utility owned by a government" (government); "tribal enterprise". "We're a 12-person C-corp" answers entity_type AND employee_count — ask neither.
+   - employee_count — a headcount is stated that lands clearly on one side of the 500 cap: "12-person", "a team of 30", "28-person", "roughly 800 employees" (the first three are well under 500; 800 is over). Do not re-ask "500 or fewer?".
+   - ownership (>50% owned AND controlled by US citizens or permanent residents) — the description states WHO OWNS the company by citizenship, in EITHER direction, and either way the gate is ANSWERED so you MUST NOT ask it:
+       • The gate FAILS (skip it — the answer is already "no"): "70% owned by a foreign parent" / "majority foreign-owned" / "mostly owned overseas" / "a foreign company holds most of it" / "only a minority is held by US citizens".
+       • The gate PASSES (skip it): "majority-owned by its US-citizen founders" / "founded by a US citizen and a green-card holder who together own 65%" (permanent residents / green-card holders count toward US ownership).
+     CRITICAL — do NOT treat "US-based" / "US-registered" / "US-incorporated" / "a US company" / "a US for-profit" / "Delaware C-corp" as answering ownership: those state incorporation LOCATION, not who owns the company by CITIZENSHIP, and a US-registered company can still be majority foreign-owned. When only the incorporation location is given (and not the citizen-ownership split), the ownership gate is genuinely OPEN — ask it.
+   - registration — SAM.gov / UEI status is stated EITHER way, and both answer the gate so you MUST NOT ask it: "already registered in SAM.gov with an active UEI" (yes) OR "does not yet have a SAM.gov registration or UEI" / "not yet registered" / "no UEI" (no). A stated "not registered yet" is a complete answer — do not ask them to confirm they lack it.
+   - GOVERNMENT / PUBLIC applicants (municipal, state, tribal-government, a public utility owned by a city): the SBIR/STTR individual-citizen ownership gate DOES NOT APPLY — SBIR/STTR require a for-profit small business concern, so ">50% owned and controlled by US citizens" is not answerable in that frame. NEVER ask a government/public applicant the SBIR ownership gate; route them to the grant families/agencies (infrastructure, EPA / DOE / DOT / USDA) that fund public entities.
+
+4. STRUCTURED ANSWERS. Typing is friction. Wherever the answer space is enumerable (entity type, yes/no gates, agencies, TRL 1-9, EHR vendor), use multiple choice: set "answer_kind" to "single_select" (one answer) or "multi_select" (several), give a short list of concrete "options", set "allow_free_text" to true, and INCLUDE an "other" option (value "other") so the founder is never trapped. Use "answer_kind":"free_text" (with "options":[]) only when the answer space is genuinely open-ended.
+
+WORKED EXAMPLES (reason like this; do not echo them back):
+- Description: "SkySentry is a US-registered drone company, but 70% owned by a foreign parent overseas; the remaining 30% is held by US-citizen employees. Seeking federal R&D funding." → The ownership gate is ANSWERED and it FAILS: the company is majority foreign-owned, so the answer to "more than 50% owned and controlled by US citizens?" is already NO. You MUST NOT ask that ownership question — re-asking it to hear the same no is the exact mistake this rule forbids. "US-registered" does not reopen it. Entity type (a for-profit company) is stated too. The correct output re-asks NO gate — at most one program_family/agency question, or zero questions.
+- Description: "ClarityRx is a 4-person US for-profit that does not yet have a SAM.gov registration or UEI." → registration is ANSWERED (the answer is "no, not yet") — do NOT ask about SAM.gov/UEI. entity_type (for-profit) and employee_count (4) are answered too. Ownership: "US for-profit" is incorporation, not citizen ownership — that gate is still OPEN, so asking it is fine.
+- Description: "Ferrolyte Energy is a 28-person US for-profit building grid-scale batteries." → entity_type (for-profit) and employee_count (28) are answered — skip both. Ownership is NOT answered: "US for-profit" is incorporation, not citizen ownership, so asking the ownership gate here IS correct. Registration is unstated — asking about SAM.gov/UEI is fair.
+
+Return ONLY a JSON object — no preamble, no markdown fences — of exactly this shape:
+
+{
+  "already_answered_gates": [ "entity_type" | "ownership" | "employee_count" | "registration" | "geography" | "program_prerequisite" ],
+                                        // PHASE 1 — fill this FIRST: every gate the description already answers,
+                                        // whether the answer passes OR fails the gate. No question below may have a
+                                        // "gate_class" that appears in this array. Empty array if nothing is answered.
+  "questions": [
+    {
+      "question": string,              // plainly worded for a founder, one sentence
+      "routing_target": "eligibility_gate" | "program_family" | "agency",
+      "gate_class": "entity_type" | "ownership" | "employee_count" | "registration" | "geography" | "program_prerequisite" | null,
+                                        // required (non-null) when routing_target is "eligibility_gate"; otherwise null
+      "answer_kind": "single_select" | "multi_select" | "free_text",
+      "options": [ { "value": string, "label": string } ],   // [] for free_text; for select kinds include an "other" option
+      "allow_free_text": boolean,       // true wherever a founder might not fit a listed option
+      "rationale": string,              // one short line: which branch/gate this resolves and how it changes which programs match
+      "maps_to_profile_field": string | null
+                                        // the CompanyProfile field this answer enriches: one of
+                                        // entity_type, us_owned, employee_count, sam_registered, uei,
+                                        // geography_designations, certifications, trl, prior_federal_funding,
+                                        // industry, technology, funding_stage — or null
+    }
+  ]
+}
+
+Aim for 3-5 questions when the description leaves gates or routing open; return fewer (down to zero) when it does not. Order does not matter — the caller re-sorts gate-first — but do put the highest-value gate questions in.`;
+
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
   explainMatches: definePrompt("explainMatches", "v1", EXPLAIN_MATCHES_V1_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
   generateInterviewQuestions: definePrompt(
     "generateInterviewQuestions",
-    "v1",
-    GENERATE_INTERVIEW_QUESTIONS_V1_TEMPLATE,
+    "v2",
+    GENERATE_INTERVIEW_QUESTIONS_V2_TEMPLATE,
   ),
 };
 
