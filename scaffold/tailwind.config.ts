@@ -34,6 +34,8 @@ export default {
         success: "var(--color-success)",
         warning: "var(--color-warning)",
         error: "var(--color-error)",
+        // H8: theme-independent dark ink for text on info/success/warning fills.
+        "on-semantic": "var(--color-on-semantic)",
       },
       fontFamily: {
         display: ["var(--font-display)", "system-ui", "sans-serif"],

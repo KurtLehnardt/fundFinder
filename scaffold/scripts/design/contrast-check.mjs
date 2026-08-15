@@ -63,6 +63,8 @@ const light = {
   structureOnCanvas: "#005ea2",
   action: "#538200",
   white: "#ffffff",
+  // H8 — theme-independent dark ink for text on a semantic fill (badges/chips).
+  onSemantic: "#212121",
 };
 
 const dark = {
@@ -73,6 +75,8 @@ const dark = {
   structureOnCanvas: "#73b3e7",
   action: "#538200",
   white: "#ffffff",
+  // H8 — identical to light (theme-independent; the fills don't flip).
+  onSemantic: "#212121",
 };
 
 const semantic = {
@@ -97,9 +101,12 @@ const REQUIRED_PAIRINGS = [
   ["light: structure link/heading text on canvas-alt", light.structureOnCanvas, light.canvasAlt, AA_TEXT],
   ["light: white text on action (primary CTA / progress fill) — spec: ~4.6:1, no margin", light.white, light.action, AA_TEXT],
   ["light: white text on error fill (banner/badge)", light.white, semantic.error, AA_TEXT],
-  ["light: dark text on info fill (chip/badge)", light.foreground, semantic.info, AA_TEXT],
-  ["light: dark text on success fill (chip/badge)", light.foreground, semantic.success, AA_TEXT],
-  ["light: dark text on warning fill (chip/badge)", light.foreground, semantic.warning, AA_TEXT],
+  // H8 — tier/eligibility badges: theme-independent dark ink (--color-on-semantic),
+  // NOT --color-foreground (which flips near-white in dark mode). Guarded in BOTH
+  // themes because these badges ship live via prefers-color-scheme.
+  ["light: badge ink on info fill (chip/badge)", light.onSemantic, semantic.info, AA_TEXT],
+  ["light: badge ink on success fill (chip/badge)", light.onSemantic, semantic.success, AA_TEXT],
+  ["light: badge ink on warning fill (chip/badge)", light.onSemantic, semantic.warning, AA_TEXT],
   ["[non-text] light: action fill vs canvas-alt (progress track)", light.action, light.canvasAlt, AA_NON_TEXT],
   ["[non-text] light: action fill vs canvas", light.action, light.canvas, AA_NON_TEXT],
 
@@ -110,6 +117,13 @@ const REQUIRED_PAIRINGS = [
   ["dark: structure link/heading text on canvas-alt", dark.structureOnCanvas, dark.canvasAlt, AA_TEXT],
   ["dark: white text on action (theme-independent pairing)", dark.white, dark.action, AA_TEXT],
   ["dark: white text on error fill (theme-independent pairing)", dark.white, semantic.error, AA_TEXT],
+  // H8 — the same tier/eligibility badges in dark mode. The ink is theme-
+  // independent (dark.onSemantic === light.onSemantic) and the fills are
+  // constant, so these must clear AA here too — this is the pairing that was
+  // ~1.4-1.9:1 when the badges used the (flipped) foreground token.
+  ["dark: badge ink on info fill (chip/badge)", dark.onSemantic, semantic.info, AA_TEXT],
+  ["dark: badge ink on success fill (chip/badge)", dark.onSemantic, semantic.success, AA_TEXT],
+  ["dark: badge ink on warning fill (chip/badge)", dark.onSemantic, semantic.warning, AA_TEXT],
 ];
 
 // ---------------------------------------------------------------------------

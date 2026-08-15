@@ -61,6 +61,11 @@ export const colors = {
     structureOnCanvas: "#005ea2",
     action: "#538200",
     white: "#ffffff",
+    // H8 — dark ink for text on a semantic fill. THEME-INDEPENDENT: identical
+    // in dark below on purpose (the fills don't flip, so the ink must not
+    // either). foreground is NOT used for these badges because it flips near-
+    // white in dark mode and fails AA on the light semantic fills.
+    onSemantic: "#212121",
   },
   dark: {
     canvas: "#1b1b1b",
@@ -70,6 +75,8 @@ export const colors = {
     structureOnCanvas: "#73b3e7",
     action: "#538200",
     white: "#ffffff",
+    // H8 — identical to light (theme-independent; see the light note above).
+    onSemantic: "#212121",
   },
 } as const;
 

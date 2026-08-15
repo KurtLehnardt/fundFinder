@@ -43,6 +43,16 @@ body {
   --color-error: #e52207;
 
   /*
+   * H8 — theme-INDEPENDENT dark ink for text sitting ON a semantic fill
+   * (info/success/warning chips and badges). The semantic fills are constant
+   * across themes, so a constant dark ink keeps badge text at the already-
+   * verified light-mode AA ratio in BOTH themes. Do NOT use --color-foreground
+   * for these badges: it flips to near-white (#f1f1f1) in dark mode, dropping
+   * badge contrast on the light fills to ~1.4-1.9:1. (error keeps white text.)
+   */
+  --color-on-semantic: #212121;
+
+  /*
    * Elevation shadows (polish pass). Layered transparent shadows give cards /
    * panels / icon controls depth without a hard navy border — "shadows for
    * elevation, borders for structure." These are neutral black alphas (not a
@@ -90,6 +100,9 @@ body {
     --color-success: #04c585;
     --color-warning: #ffbe2e;
     --color-error: #e52207;
+    /* H8: identical to light on purpose — theme-independent (see :root). The
+     * semantic fills don't flip, so the badge ink must not flip either. */
+    --color-on-semantic: #212121;
 
     /* Dark mode: layered black ambient shadows are invisible on a dark canvas,
      * so depth comes from a subtle white ring instead (per the polish skill). */
