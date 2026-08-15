@@ -31,5 +31,6 @@ export function readRawOverrides(): Record<FlagName, string | undefined> {
     r9_supabase_auth: process.env.NEXT_PUBLIC_FLAG_R9_SUPABASE_AUTH,
     r10_analytics: process.env.NEXT_PUBLIC_FLAG_R10_ANALYTICS,
     r4b_cost_debug: process.env.NEXT_PUBLIC_FLAG_R4B_COST_DEBUG,
+    left_sidebar: process.env.NEXT_PUBLIC_FLAG_LEFT_SIDEBAR,
   };
 }

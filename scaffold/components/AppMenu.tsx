@@ -14,6 +14,7 @@ import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { UserMenu } from "@/components/UserMenu";
 import SettingsPanel from "@/components/SettingsPanel";
+import AppSidebar from "@/components/AppSidebar";
 
 /**
  * FE-06 — one nav cluster: hamburger menu (always present; Settings is
@@ -60,6 +61,11 @@ export function SettingsPanelProvider({ children }: { children: ReactNode }) {
 
 export default function AppMenu() {
   const design = isFlagEnabled("r7_design");
+  // FE-07: when on, the hamburger opens a left slide-out drawer (AppSidebar)
+  // instead of the dropdown, and the dropdown's "Settings" button is dropped
+  // (Settings lives inside the drawer). Default OFF -> today's dropdown,
+  // byte-for-byte.
+  const sidebar = isFlagEnabled("left_sidebar");
   // Show the sign-in surface when EITHER auth backend is live: the real
   // Supabase flag (R9) or the interim mock flag (R9.0). Checking only the mock
   // flag would hide sign-in when real auth is the one that's on.
@@ -72,9 +78,11 @@ export default function AppMenu() {
 
   // Close on outside click and on Esc — this is a lightweight dropdown, not
   // a modal dialog, so it gets simple dismiss behavior rather than the full
-  // focus-trap treatment AutoApplyModal/SettingsPanel use.
+  // focus-trap treatment AutoApplyModal/SettingsPanel use. In sidebar mode the
+  // drawer (AppSidebar) supplies its own focus-trap/Esc via useDialogA11y, so
+  // this dropdown-only handler is skipped.
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen || sidebar) return;
     function onPointerDown(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
@@ -87,7 +95,7 @@ export default function AppMenu() {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [menuOpen]);
+  }, [menuOpen, sidebar]);
 
   const hamburgerBtnClass = design
     ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-structure-on-canvas p-2 text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
@@ -111,14 +119,15 @@ export default function AppMenu() {
         <button
           type="button"
           onClick={() => setMenuOpen((o) => !o)}
-          aria-haspopup="menu"
+          aria-haspopup={sidebar ? "dialog" : "menu"}
           aria-expanded={menuOpen}
           aria-label="Menu"
           className={hamburgerBtnClass}
         >
           <HamburgerIcon className="h-4 w-4" />
         </button>
-        {menuOpen && (
+        {/* FE-07 OFF (default): the original dropdown with its Settings button. */}
+        {!sidebar && menuOpen && (
           <div role="menu" aria-label="App menu" className={menuClass}>
             <button
               type="button"
@@ -134,6 +143,9 @@ export default function AppMenu() {
           </div>
         )}
       </div>
+
+      {/* FE-07 ON: the hamburger opens the left slide-out drawer instead. */}
+      {sidebar && menuOpen && <AppSidebar onClose={() => setMenuOpen(false)} />}
 
       {authOn && !loading && (
         user ? (

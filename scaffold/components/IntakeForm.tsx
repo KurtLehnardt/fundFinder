@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TEST_CASES } from "@/lib/testCases";
 import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
+import { useSearchDraft } from "@/components/SearchDraftProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import { BRAND } from "@/lib/brand";
 import SearchProgress from "@/components/SearchProgress";
@@ -35,6 +36,20 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const [samplesOpen, setSamplesOpen] = useState(false);
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
+
+  // FE-07: when the left sidebar is on, "Delete my data" moves into the drawer's
+  // Account section, so it's dropped from here. Off (default) -> unchanged.
+  const sidebar = isFlagEnabled("left_sidebar");
+
+  // FE-07: the drawer's "Use this" (on a saved company-description version)
+  // pushes text into this search box via SearchDraftProvider. Keyed on the
+  // nonce so loading the same text twice still fires. No-op flag-off (nothing
+  // ever calls requestSearchDraft then).
+  const { pending } = useSearchDraft();
+  useEffect(() => {
+    if (pending) setText(pending.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending?.nonce]);
 
   // R1 (FE-03): pre-search interview. Off (default) = today's behavior
   // EXACTLY — beginSearch() below short-circuits straight to run(), and
@@ -290,20 +305,25 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
             </p>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3 pl-[26px]">
-            <button
-              type="button"
-              onClick={handleDeleteMyData}
-              className="font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline decoration-dotted underline-offset-2 transition hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2"
-            >
-              Delete my data
-            </button>
-            {justCleared && (
-              <span className="font-mono text-[11px] text-slate-550">
-                Local data cleared.
-              </span>
-            )}
-          </div>
+          {/* FE-07: flag ON -> Delete my data lives in the drawer's Account
+              section instead, so it's dropped here. The consent checkbox above
+              stays at the input in both modes. */}
+          {!sidebar && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 pl-[26px]">
+              <button
+                type="button"
+                onClick={handleDeleteMyData}
+                className="font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline decoration-dotted underline-offset-2 transition hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2"
+              >
+                Delete my data
+              </button>
+              {justCleared && (
+                <span className="font-mono text-[11px] text-slate-550">
+                  Local data cleared.
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
