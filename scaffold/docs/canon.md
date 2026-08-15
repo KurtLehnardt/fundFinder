@@ -52,8 +52,11 @@ fetch+normalize logic (`scripts/1-fetch.mjs` + `scripts/2-normalize.mjs`):
    `forecast`) rather than inferring them after the fact, the way the v1
    static-corpus seed has to.
 3. **Embed** — OpenAI `text-embedding-3-small`, `dimensions: 512` — the same
-   model/dimensionality retrieval uses to embed the founder's query
-   (`lib/canon/hybridQuery.ts`), so cosine similarity is comparable.
+   model/dimensionality the live retrieval path uses to embed the founder's
+   query (`lib/embed.ts`, consumed by `lib/match.ts`), so cosine similarity is
+   comparable. (The pgvector hybrid scorer that formerly lived in
+   `lib/canon/hybridQuery.ts` was deprecated/removed — it never served
+   retrieval. See `docs/retrieval-source-of-truth.md`.)
 4. **Validate** — `CanonOpportunitySchema.parse(...)` at the write boundary
    (a malformed record is dropped + alarmed, not allowed to corrupt the
    batch).
