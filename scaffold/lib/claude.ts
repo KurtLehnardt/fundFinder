@@ -105,30 +105,29 @@ function parseJson<T>(raw: string): T {
  * already-spent call's cost must never go unrecorded because of a downstream
  * parse failure.
  *
- * `@anthropic-ai/sdk` `^0.32.1`'s non-beta `Usage` type only declares
- * `input_tokens`/`output_tokens` (verified against the installed SDK's
- * `resources/messages.d.ts`) — `cache_creation_input_tokens`/
- * `cache_read_input_tokens` only exist on the beta prompt-caching response
- * type, which this app doesn't call. Read them anyway via a loose cast, in
- * case a future SDK bump/response starts including them; they're `undefined`
- * today, which is the expected value (see meter.ts's `StageCost` comment).
+ * `@anthropic-ai/sdk` `^0.32.1`'s non-beta `Usage` type only declared
+ * `input_tokens`/`output_tokens` — `cache_creation_input_tokens`/
+ * `cache_read_input_tokens` only existed on the beta prompt-caching response
+ * type. `^0.33.0` promoted prompt caching to general availability and folded
+ * both fields into the STABLE `Usage` type (verified against the installed
+ * SDK's `resources/messages/messages.d.ts`: `cache_creation_input_tokens:
+ * number | null` / `cache_read_input_tokens: number | null`), so they can be
+ * read directly off `usage` with no cast. `scoreGroup` below is the first
+ * (and, today, only) call that actually sets `cache_control`, so this is
+ * where these stop being `undefined` — every other call site still reports
+ * `undefined`, which is the expected value (see meter.ts's `StageCost`
+ * comment).
  */
 function recordUsage(meter: CostMeter | undefined, stage: string, usage: Anthropic.Messages.Usage, latencyMs: number, model: string = MODEL): void {
   if (!meter) return;
-  const raw = (usage ?? {}) as unknown as {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_creation_input_tokens?: number | null;
-    cache_read_input_tokens?: number | null;
-  };
   meter.record({
     stage,
     provider: "anthropic",
     model,
-    inputTokens: raw.input_tokens ?? 0,
-    outputTokens: raw.output_tokens ?? 0,
-    cacheCreationInputTokens: raw.cache_creation_input_tokens ?? undefined,
-    cacheReadInputTokens: raw.cache_read_input_tokens ?? undefined,
+    inputTokens: usage?.input_tokens ?? 0,
+    outputTokens: usage?.output_tokens ?? 0,
+    cacheCreationInputTokens: usage?.cache_creation_input_tokens ?? undefined,
+    cacheReadInputTokens: usage?.cache_read_input_tokens ?? undefined,
     latencyMs,
   });
 }
@@ -208,12 +207,22 @@ export async function explainMatches(
       {
         model: MODEL,
         max_tokens: 8000, // ~900/assessment * 8 = 7200, fits with margin
-        // NOTE: prompt `cache_control` on the static system prompt would trim
-        // repeat input tokens, but @anthropic-ai/sdk ^0.32.1's non-beta
-        // `TextBlockParam` doesn't type it (cache fields are beta-only in this
-        // SDK — see recordUsage's note). Deferred to an SDK bump rather than
-        // casting past the types on a live call.
-        system: SYSTEM,
+        // Prompt-caching breakpoint on the static system prompt: SYSTEM is
+        // identical on every batch of every search (only the user message —
+        // profile + candidate group — varies), so this is the highest-volume
+        // repeat-input-token call in the app. `cache_control: {type:
+        // "ephemeral"}` on this block tells Anthropic to cache it (5min TTL,
+        // refreshed on each hit) so concurrent/subsequent batches read it
+        // from cache instead of paying full input-token price for it again.
+        // Bumped @anthropic-ai/sdk ^0.32.1 -> ^0.33.1 (GA prompt-caching
+        // release, non-breaking per upstream changelog) so `TextBlockParam`
+        // types `cache_control` on the STABLE (non-beta) client — no beta
+        // namespace, no casting past the types. `SYSTEM` itself (the prompt
+        // TEXT) is unchanged: it's still `loadPrompt("explainMatches")
+        // .template` verbatim, so the content-hash lock (V1_BASELINE_HASHES,
+        // `npm run check:prompts`) is unaffected — only the wire shape of
+        // this one field changed, not what's sent.
+        system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
         messages: [
           {
             role: "user",
