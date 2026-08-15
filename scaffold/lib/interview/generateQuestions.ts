@@ -99,7 +99,7 @@ export type InterviewQuestion = z.infer<typeof InterviewQuestionSchema>;
 
 // --- Model-output schema (before we normalize + rank) ----------------------
 
-const RawQuestionSchema = z.object({
+export const RawQuestionSchema = z.object({
   question: z.string().trim().min(1),
   routing_target: RoutingTargetSchema,
   gate_class: GateClassSchema.nullish(),
@@ -109,7 +109,7 @@ const RawQuestionSchema = z.object({
   rationale: z.string().nullish(),
   maps_to_profile_field: z.string().nullish(),
 });
-type RawQuestion = z.infer<typeof RawQuestionSchema>;
+export type RawQuestion = z.infer<typeof RawQuestionSchema>;
 
 const RawResponseSchema = z.object({
   questions: z.array(RawQuestionSchema).nullish(),
@@ -136,12 +136,29 @@ const GATE_RANK: Record<GateClass, number> = {
 const GATE_RANK_UNSPECIFIED = 90; // an eligibility_gate the model left unclassed
 const GATE_RANK_NON_GATE = 100; // program_family / agency questions have no gate
 
-function gateRankOf(q: RawQuestion): number {
+export function gateRankOf(q: RawQuestion): number {
   if (q.routing_target !== "eligibility_gate") return GATE_RANK_NON_GATE;
   return q.gate_class ? GATE_RANK[q.gate_class] : GATE_RANK_UNSPECIFIED;
 }
 
 // --- Options / call config -------------------------------------------------
+
+/**
+ * The minimal structural slice of the OpenAI client this module uses. Declared
+ * so tests (H7) can inject a canned chat-completions client and exercise the
+ * full parse→schema→normalize pipeline hermetically (no network, no API key) —
+ * including reproducing the exact EVL-03 `defense-hw-08` model output.
+ */
+export interface InterviewChatClient {
+  chat: {
+    completions: {
+      create: (
+        params: any,
+        options?: { signal?: AbortSignal },
+      ) => Promise<{ choices: Array<{ message?: { content?: string | null } | null } | null> }>;
+    };
+  };
+}
 
 export interface GenerateQuestionsOptions {
   /** Defaults to `process.env.OPENAI_API_KEY`. Never logged. */
@@ -154,6 +171,12 @@ export interface GenerateQuestionsOptions {
   timeoutMs?: number;
   /** Abort in-flight generation (e.g. user hit "search anyway"). */
   signal?: AbortSignal;
+  /**
+   * Injectable OpenAI-compatible client (H7 testability seam). When provided,
+   * the real `new OpenAI(...)` is bypassed and no `OPENAI_API_KEY` is required.
+   * Production callers omit this and get the real client.
+   */
+  client?: InterviewChatClient;
 }
 
 /**
@@ -212,7 +235,7 @@ function normalizeAnswerShape(q: RawQuestion): {
   };
 }
 
-function normalize(raw: RawQuestion[], maxQuestions: number): InterviewQuestion[] {
+export function normalize(raw: RawQuestion[], maxQuestions: number): InterviewQuestion[] {
   // Gate-first, then within gates by R8.1 importance, stable on model order.
   const ordered = raw
     .map((q, index) => ({ q, index }))
@@ -271,19 +294,24 @@ export async function generateQuestions(
     throw new InterviewGenerationError("description is empty");
   }
 
-  const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new InterviewGenerationError(
-      "OPENAI_API_KEY is not set — add it to the environment (never the client bundle).",
-    );
-  }
-
   const model = opts.model ?? INTERVIEW_MODEL;
   const maxQuestions = opts.maxQuestions ?? MAX_QUESTIONS;
   const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const systemPrompt = loadPrompt(PROMPT_ID).template;
 
-  const client = new OpenAI({ apiKey, timeout, maxRetries: 1 });
+  // Injected client (tests) bypasses the real SDK and the key requirement.
+  let client: InterviewChatClient;
+  if (opts.client) {
+    client = opts.client;
+  } else {
+    const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new InterviewGenerationError(
+        "OPENAI_API_KEY is not set — add it to the environment (never the client bundle).",
+      );
+    }
+    client = new OpenAI({ apiKey, timeout, maxRetries: 1 }) as unknown as InterviewChatClient;
+  }
 
   let content: string;
   try {

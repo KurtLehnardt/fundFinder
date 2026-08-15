@@ -13,7 +13,24 @@ function cached(description: string) {
   return hit?.map;
 }
 
-export async function POST(req: NextRequest) {
+/**
+ * H6 — testability seam. The Next route handler (`POST`) forwards to this pure
+ * request→Response function with the real dependencies. Tests call it directly
+ * with a plain `Request` and a mocked `buildOpportunityMap`/`cached`, so the
+ * NDJSON framing, validation, cache short-circuit, and mid-stream error path are
+ * all verifiable in-process with no network and no model spend.
+ */
+export type MatchDeps = {
+  buildOpportunityMap: typeof buildOpportunityMap;
+  cached: (description: string) => unknown;
+};
+
+const REAL_DEPS: MatchDeps = { buildOpportunityMap, cached };
+
+export async function handleMatchRequest(
+  req: Request,
+  deps: MatchDeps = REAL_DEPS,
+): Promise<Response> {
   // Validation errors return plain JSON (the client checks res.ok before
   // reading the stream). Everything else streams NDJSON progress + result.
   let description: string;
@@ -37,7 +54,7 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n")); } catch { /* stream closed */ }
       };
       try {
-        const hit = cached(description);
+        const hit = deps.cached(description);
         if (hit) {
           // Pre-baked: still emit a milestone so the bar resolves cleanly.
           send({ type: "progress", key: "cached", label: "Loading your opportunity map", pct: 95 });
@@ -46,7 +63,7 @@ export async function POST(req: NextRequest) {
           return;
         }
 
-        const map = await buildOpportunityMap(description, (e: StepEvent) =>
+        const map = await deps.buildOpportunityMap(description, (e: StepEvent) =>
           send({ type: "progress", ...e })
         );
         send({ type: "result", map });
@@ -70,4 +87,8 @@ export async function POST(req: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+export async function POST(req: NextRequest) {
+  return handleMatchRequest(req);
 }
