@@ -2,6 +2,7 @@
 import { Component, type ReactNode } from "react";
 import OpportunityCard from "./OpportunityCard";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
+import { isFlagEnabled } from "@/lib/flags";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M+` : `$${Math.round(n / 1e3)}K+`;
@@ -9,16 +10,26 @@ const money = (n: number) =>
 /** Cards to render. We never wall the founder with the 20+ "none" rows. */
 const CARD_CAP = 8;
 
+/** FE-01: shared "eyebrow"-style mono label, token-driven when r7_design is on. */
+function eyebrowClass(design: boolean, extra = "") {
+  return design
+    ? `font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas ${extra}`.trim()
+    : `eyebrow ${extra}`.trim();
+}
+
 /** Small boundary so a malformed match can't white-screen the whole demo. */
-class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class Boundary extends Component<{ children: ReactNode; design: boolean }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
   render() {
     if (this.state.failed) {
+      const cls = this.props.design
+        ? "mt-8 border-l-2 border-error bg-canvas-alt px-4 py-3 font-body text-sm text-foreground"
+        : "mt-8 border-l-2 border-fit-adjacent bg-white px-4 py-3 font-body text-sm text-ink";
       return (
-        <p className="mt-8 border-l-2 border-fit-adjacent bg-white px-4 py-3 font-body text-sm text-ink">
+        <p className={cls}>
           We hit a snag rendering these results. Try rephrasing your description and running it again.
         </p>
       );
@@ -62,6 +73,9 @@ function fundingCell(shown: Match[]): { n: string; label: string } | null {
 export default function OpportunityMap({ map }: { map: MapT }) {
   if (!map || typeof map !== "object") return null;
 
+  // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
+  const design = isFlagEnabled("r7_design");
+
   const matches: Match[] = Array.isArray(map.matches) ? map.matches : [];
   const followUps: string[] = Array.isArray(map.followUps) ? map.followUps : [];
   const agencyIntelligence = Array.isArray(map.agencyIntelligence) ? map.agencyIntelligence : [];
@@ -78,35 +92,82 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const closingSoon = shown.filter((m) => withinNinetyDays(m.opportunity?.deadline)).length;
   const funding = fundingCell(shown);
 
+  const statGridClass = design
+    ? "grid grid-cols-2 gap-px border border-structure-on-canvas bg-structure-on-canvas sm:grid-cols-4"
+    : "grid grid-cols-2 gap-px border border-rule bg-rule sm:grid-cols-4";
+
+  // "A finding, not a dead end" is the honest-no hero panel — navy structure
+  // fill (white content on top), same pairing as the header/nav per R7.2.
+  const weakFieldClass = design
+    ? "mt-8 border border-structure bg-structure px-7 py-7 text-token-white"
+    : "mt-8 border border-ink bg-ink px-7 py-7 text-paper";
+
+  const weakFieldBodyClass = design
+    ? "mt-3 max-w-2xl font-body text-[15px] leading-relaxed text-token-white"
+    : "mt-3 max-w-2xl font-body text-[15px] leading-relaxed text-paper/85";
+
+  // Full-opacity token.white throughout the panel rather than opacity
+  // modifiers: Tailwind can't precompute alpha for CON-02's CSS-var-backed
+  // colors at build time (only for v1's literal-hex theme colors), so an
+  // opacity slash on these tokens silently doesn't apply. De-emphasis in v2
+  // comes from type hierarchy, not color-fade.
+  const redirectItemClass = design ? "border-l-2 border-token-white pl-4" : "border-l-2 border-paper/25 pl-4";
+
+  const redirectWhyClass = design
+    ? "mt-1 font-body text-[13px] leading-relaxed text-token-white"
+    : "mt-1 font-body text-[13px] leading-relaxed text-paper/70";
+
+  const followUpsSectionClass = design
+    ? "mt-8 border border-structure-on-canvas bg-canvas-alt px-6 py-5"
+    : "mt-8 border border-rule bg-white px-6 py-5";
+
+  const followUpItemClass = design
+    ? "font-body text-[14px] text-foreground"
+    : "font-body text-[14px] text-slate-550";
+
+  const agenciesSectionClass = design
+    ? "mt-10 border-t border-structure-on-canvas pt-7"
+    : "mt-10 border-t border-rule pt-7";
+
+  const agencyCountClass = design ? "font-mono text-[11px] text-foreground" : "font-mono text-[11px] text-slate-550";
+
+  const agencyWhyClass = design
+    ? "mt-1.5 font-body text-[13px] leading-relaxed text-foreground"
+    : "mt-1.5 font-body text-[13px] leading-relaxed text-slate-550";
+
+  const footerClass = design
+    ? "mt-10 border-t border-structure-on-canvas pt-5 font-body text-[12px] leading-relaxed text-foreground"
+    : "mt-10 border-t border-rule pt-5 font-body text-[12px] leading-relaxed text-slate-550";
+
   return (
-    <Boundary>
+    <Boundary design={design}>
       <div className="reveal">
         {/* On a weak-field finding the honest panel is the hero — an empty
             "0 / $0" band above it would read as a failed query, so we drop it. */}
         {!w && (
-          <div className="grid grid-cols-2 gap-px border border-rule bg-rule sm:grid-cols-4">
-            <Cell n={String(highPotential)} label="high-potential opportunities" />
-            {funding && <Cell n={funding.n} label={funding.label} />}
-            <Cell n={String(agencyIntelligence.length)} label="relevant agencies" />
-            <Cell n={String(closingSoon)} label="closing within 90 days" />
+          <div className={statGridClass}>
+            <Cell design={design} n={String(highPotential)} label="high-potential opportunities" />
+            {funding && <Cell design={design} n={funding.n} label={funding.label} />}
+            <Cell design={design} n={String(agencyIntelligence.length)} label="relevant agencies" />
+            <Cell design={design} n={String(closingSoon)} label="closing within 90 days" />
           </div>
         )}
 
         {/* The honest no. Deliberate, not an error state. */}
         {w && (
-          <section className="mt-8 border border-ink bg-ink px-7 py-7 text-paper">
-            <p className="eyebrow text-paper/55">A finding, not a dead end</p>
+          <section className={weakFieldClass}>
+            <p className={eyebrowClass(design)}>A finding, not a dead end</p>
             <h2 className="mt-3 font-display text-[24px] font-medium leading-snug">{w.headline}</h2>
-            <p className="mt-3 max-w-2xl font-body text-[15px] leading-relaxed text-paper/85">{w.reasoning}</p>
+            <p className={weakFieldBodyClass}>{w.reasoning}</p>
 
             {w.redirects?.length > 0 && (
               <>
-                <p className="eyebrow mt-7 text-paper/55">Where to look instead</p>
+                <p className={eyebrowClass(design, "mt-7")}>Where to look instead</p>
                 <ul className="mt-3 grid gap-4 sm:grid-cols-2">
                   {w.redirects.map((r, i) => (
-                    <li key={i} className="border-l-2 border-paper/25 pl-4">
+                    <li key={i} className={redirectItemClass}>
                       <p className="font-display text-[15px] font-medium">{r.label}</p>
-                      <p className="mt-1 font-body text-[13px] leading-relaxed text-paper/70">{r.why}</p>
+                      <p className={redirectWhyClass}>{r.why}</p>
                     </li>
                   ))}
                 </ul>
@@ -116,11 +177,11 @@ export default function OpportunityMap({ map }: { map: MapT }) {
         )}
 
         {followUps.length > 0 && (
-          <section className="mt-8 border border-rule bg-white px-6 py-5">
-            <p className="eyebrow mb-3">A few things would sharpen this</p>
+          <section className={followUpsSectionClass}>
+            <p className={eyebrowClass(design, "mb-3")}>A few things would sharpen this</p>
             <ul className="space-y-2">
               {followUps.map((q, i) => (
-                <li key={i} className="font-body text-[14px] text-slate-550">{q}</li>
+                <li key={i} className={followUpItemClass}>{q}</li>
               ))}
             </ul>
           </section>
@@ -128,7 +189,7 @@ export default function OpportunityMap({ map }: { map: MapT }) {
 
         {shown.length > 0 && (
           <section className="mt-8">
-            <p className="eyebrow mb-4">
+            <p className={eyebrowClass(design, "mb-4")}>
               {w ? "Adjacent and partial matches" : "Your opportunity map"}
             </p>
             <div className="space-y-3">
@@ -140,23 +201,23 @@ export default function OpportunityMap({ map }: { map: MapT }) {
         )}
 
         {agencyIntelligence.length > 0 && (
-          <section className="mt-10 border-t border-rule pt-7">
-            <p className="eyebrow mb-4">Agencies that matter most to you</p>
+          <section className={agenciesSectionClass}>
+            <p className={eyebrowClass(design, "mb-4")}>Agencies that matter most to you</p>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {agencyIntelligence.map((a) => (
                 <div key={a.agency}>
                   <p className="font-display text-[15px] font-medium">{a.agency}</p>
-                  <p className="font-mono text-[11px] text-slate-550">
+                  <p className={agencyCountClass}>
                     {a.opportunityCount} {a.opportunityCount === 1 ? "opportunity" : "opportunities"}
                   </p>
-                  <p className="mt-1.5 font-body text-[13px] leading-relaxed text-slate-550">{a.why}</p>
+                  <p className={agencyWhyClass}>{a.why}</p>
                 </div>
               ))}
             </div>
           </section>
         )}
 
-        <p className="mt-10 border-t border-rule pt-5 font-body text-[12px] leading-relaxed text-slate-550">
+        <p className={footerClass}>
           These are assessments, not eligibility determinations. Confirm requirements with the
           program officer before you invest time in an application.
         </p>
@@ -165,11 +226,12 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   );
 }
 
-function Cell({ n, label }: { n: string; label: string }) {
+function Cell({ design, n, label }: { design: boolean; n: string; label: string }) {
+  const cellClass = design ? "bg-canvas-alt px-5 py-6 text-foreground" : "bg-paper px-5 py-6";
   return (
-    <div className="bg-paper px-5 py-6">
+    <div className={cellClass}>
       <div className="font-display text-[30px] font-bold leading-none">{n}</div>
-      <div className="eyebrow mt-2 leading-snug">{label}</div>
+      <div className={eyebrowClass(design, "mt-2 leading-snug")}>{label}</div>
     </div>
   );
 }
