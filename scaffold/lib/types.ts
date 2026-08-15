@@ -31,15 +31,19 @@ export type {
 } from "./contracts";
 
 /**
- * ELG-04 — app-facing `Match` is the frozen CON-01 contract `Match` plus an
+ * ELG-04 — app-facing `Match` is the CON-01 contract `Match` plus its
  * OPTIONAL, additive `eligibility` field: the ELG-01 determination wrapped with
  * its ELG-02 freshness annotation, attached by `buildOpportunityMap`.
  *
- * The zod `MatchSchema` in `lib/contracts` stays the frozen v1 shape (so
- * `data/precomputed.json` keeps validating), and this augmentation is TS-only
- * and cache-safe: cached maps simply lack the field, and every unit that reads
- * `Match`/`OpportunityMap` already imports them from `@/lib/types`, so they all
- * see the optional field.
+ * (schema-reconcile) The zod `MatchSchema` in `lib/contracts/opportunityMap.ts`
+ * now DECLARES `eligibility` itself (as an optional field mirroring
+ * `EligibilityDeterminationWithFreshness`), rather than staying silently frozen
+ * to the v1 shape — so a live map's boundary validation actually reflects what
+ * `buildOpportunityMap` produces. This TS type still re-states the field
+ * (harmless intersection with the now-matching zod-inferred shape) so it reads
+ * standalone; the important cache-safety property is unchanged: it's optional,
+ * so cached/precomputed maps (which lack it) validate and type-check exactly
+ * as before.
  */
 export type Match = MatchContract & {
   eligibility?: EligibilityDeterminationWithFreshness;
@@ -51,12 +55,12 @@ export type Match = MatchContract & {
  * (`lib/match.ts`) attaches only when the `r4b_cost_debug` flag is on (cost
  * figures must never reach the end-user UI without it — see lib/flags/registry.ts).
  *
- * Same TS-only, cache-safe augmentation pattern as ELG-04's `Match.eligibility`
- * above: the zod `OpportunityMapSchema` in `lib/contracts` stays the frozen v1
- * shape (so `data/precomputed.json` keeps validating, and the field is simply
- * absent on cached/precomputed maps), while every unit that reads
- * `OpportunityMap` already imports it from `@/lib/types`, so they all see the
- * optional field without a contract change.
+ * (schema-reconcile) Same as `Match.eligibility` above: the zod
+ * `OpportunityMapSchema` now DECLARES `costDebug` itself (optional, mirroring
+ * `SearchCostDebug`) so boundary validation matches the live builder's actual
+ * output instead of silently drifting from it. Still optional, so
+ * cached/precomputed maps (which never carry it) and every live map with the
+ * flag off keep validating unchanged.
  */
 export type OpportunityMap = Omit<OpportunityMapContract, "matches"> & {
   matches: Match[];
