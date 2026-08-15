@@ -15,6 +15,8 @@ import type { Provenanced } from '@/lib/contracts/primitives';
 export const STORAGE_KEYS = {
   authed: 'ff.auth.isAuthenticated',
   user: 'ff.auth.user',
+  demoMode: 'ff.auth.demoMode',
+  demoUser: 'ff.auth.demoUser',
   consent: 'ff.consent.v1',
   runs: 'ff.runs.v1',
   autoApply: 'ff.autoapply.v1',
@@ -110,6 +112,65 @@ export function getUser(): MockUser | null {
 
 export function isAuthenticated(): boolean {
   return getUser() !== null;
+}
+
+/* ---- Demo mode (hackathon-judge override) ----
+ * A runtime, localStorage-only override the app honors in EITHER auth backend
+ * (mock or real Supabase): when `ff.auth.demoMode` is set, the app presents a
+ * fixed "Hackathon Judge" identity regardless of any Supabase session, so a
+ * judge can explore signed-in without a real Google account and without any
+ * env/flag change. Same caveat as the rest of this file — THIS IS NOT
+ * AUTHENTICATION; it gates nothing server-side. It is toggled from the login
+ * page (see useDemoMode() in AuthProvider), cleared on sign-out and by the
+ * Google path. The demo user is persisted so its id/timestamp survive a reload;
+ * both keys live in the ff.auth.* namespace and are wiped by clearAllLocalData().
+ */
+
+export const DEMO_JUDGE_NAME = 'Hackathon Judge';
+
+export function isDemoMode(): boolean {
+  return safeStorage()?.getItem(STORAGE_KEYS.demoMode) === 'true';
+}
+
+/** The fixed demo user when demo mode is on, else null. Idempotent: a first
+ *  read with no persisted user synthesizes one and stores it. */
+export function getDemoUser(): MockUser | null {
+  const store = safeStorage();
+  if (!store) return null;
+  if (store.getItem(STORAGE_KEYS.demoMode) !== 'true') return null;
+
+  const raw = store.getItem(STORAGE_KEYS.demoUser);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as MockUser;
+      if (parsed?.id && parsed?.name) return parsed;
+    } catch {
+      // fall through and re-synthesize a fresh demo user below
+    }
+  }
+
+  const user = createMockUser(DEMO_JUDGE_NAME);
+  store.setItem(STORAGE_KEYS.demoUser, JSON.stringify(user));
+  return user;
+}
+
+/** Turn demo mode on and return the fixed "Hackathon Judge" user. */
+export function enterDemoMode(): MockUser {
+  const store = safeStorage();
+  const user = createMockUser(DEMO_JUDGE_NAME);
+  if (store) {
+    store.setItem(STORAGE_KEYS.demoMode, 'true');
+    store.setItem(STORAGE_KEYS.demoUser, JSON.stringify(user));
+  }
+  return user;
+}
+
+/** Turn demo mode off. Leaves the real backend (mock or Supabase) untouched. */
+export function exitDemoMode(): void {
+  const store = safeStorage();
+  if (!store) return;
+  store.removeItem(STORAGE_KEYS.demoMode);
+  store.removeItem(STORAGE_KEYS.demoUser);
 }
 
 /* ---- Consent (§5.3: descriptions reusable only with opt-in) ---- */
