@@ -1,0 +1,16 @@
+{
+  "profile": {
+    "description": "FasterControl — placeholder. Real map is generated once the app's Anthropic API credits are topped up.",
+    "industry": "Quality management & manufacturing execution software",
+    "location": "Utah"
+  },
+  "followUps": [],
+  "summary": { "highPotential": 0, "fundingIdentified": 0, "agencies": 0, "closingIn90Days": 0 },
+  "matches": [],
+  "agencyIntelligence": [],
+  "weakFieldFinding": {
+    "headline": "Demo data pending.",
+    "reasoning": "This sample opportunity map will be generated through the live matcher as soon as the app's Anthropic API credits are restored, then baked in here.",
+    "redirects": []
+  }
+}
