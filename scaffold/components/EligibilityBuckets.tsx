@@ -23,6 +23,12 @@ export type EligibilityItem = {
   determination: EligibilityDetermination;
   title?: string;
   agency?: string;
+  /**
+   * ELG-02 freshness caveat (from annotateFreshness). Non-null when the
+   * determination was made against stale/unverified data — §4.5/§11 require it
+   * be VISIBLY FLAGGED, never presented as if current. Rendered per-card below.
+   */
+  caveat?: string | null;
 };
 
 const BUCKET_ORDER: EligibilityBucket[] = [
@@ -173,7 +179,7 @@ function BucketBadge({ design, bucket }: { design: boolean; bucket: EligibilityB
 }
 
 function BucketCard({ item, design }: { item: EligibilityItem; design: boolean }) {
-  const { determination, title, agency } = item;
+  const { determination, title, agency, caveat } = item;
   const bucket = determination.bucket;
 
   const cardClass = design
@@ -195,6 +201,20 @@ function BucketCard({ item, design }: { item: EligibilityItem; design: boolean }
       <BucketBadge design={design} bucket={bucket} />
       {title && <h3 className={titleClass}>{title}</h3>}
       {agency && <p className={agencyClass}>{agency}</p>}
+
+      {caveat && (
+        <p
+          role="note"
+          className={
+            design
+              ? "mt-2 border-l-2 border-warning pl-3 font-body text-[12px] italic leading-relaxed text-foreground"
+              : "mt-2 border-l-2 border-fit-adjacent pl-3 font-body text-[12px] italic leading-relaxed text-slate-550"
+          }
+        >
+          <span className="font-mono uppercase tracking-eyebrow not-italic">Data freshness</span>{" "}
+          — {caveat}
+        </p>
+      )}
 
       <div className="mt-4">
         {bucket === "eligible" && <EligibleBody determination={determination} design={design} />}
