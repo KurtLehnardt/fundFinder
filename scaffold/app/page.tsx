@@ -6,7 +6,7 @@ import type { OpportunityMap as MapT } from "@/lib/types";
 import AppMenu from "@/components/AppMenu";
 import { isFlagEnabled } from "@/lib/flags";
 import { SidebarProvider, useSidebar } from "@/components/SidebarProvider";
-import SignInNudge from "@/components/SignInNudge";
+import WelcomeTour from "@/components/WelcomeTour";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 
 // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
@@ -73,9 +73,9 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
 
   return (
     <main className={mainClass} style={shiftStyle}>
-      {/* FE-07: gentle, non-blocking "sign in to save your searches" nudge on
-          load when signed out (flag-ON only). */}
-      {sidebarOn && <SignInNudge />}
+      {/* Anchored, non-blocking welcome guide on first load (flag-ON only):
+          spotlights Sign in → sample companies → the description box. */}
+      {sidebarOn && <WelcomeTour />}
 
       {/*
         FE-06: single nav cluster — hamburger (Settings, always present) +
