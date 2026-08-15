@@ -1,21 +1,13 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
 import type { OpportunityMap as MapT } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
-import { useAuth } from "@/components/AuthProvider";
-import { UserMenu } from "@/components/UserMenu";
+import AppMenu from "@/components/AppMenu";
 
 export default function Home() {
   const [map, setMap] = useState<MapT | null>(null);
-
-  // r9_0_mockauth (CON-03): flag off -> v1 path unchanged, no auth UI at all.
-  // AuthProvider always wraps the app (app/layout.tsx), so this hook is always
-  // safe to call; only the *rendering* of any auth surface is flag-gated.
-  const mockAuthOn = isFlagEnabled("r9_0_mockauth");
-  const { user, loading } = useAuth();
 
   // FE-01: gates the CON-02 USWDS restyle. Off = v1 look (unchanged), on =
   // 60/30/10 design-token look. One-flag revert — see lib/flags/registry.ts.
@@ -39,20 +31,15 @@ export default function Home() {
 
   return (
     <main className={mainClass}>
-      {mockAuthOn && !loading && (
-        <div className="mb-6 flex justify-end">
-          {user ? (
-            <UserMenu />
-          ) : (
-            <Link
-              href="/login"
-              className="rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal"
-            >
-              Sign in
-            </Link>
-          )}
-        </div>
-      )}
+      {/*
+        FE-06: single nav cluster — hamburger (Settings, always present) +
+        the PLT-01 mock-auth surface (UserMenu / "Sign in", flag-gated,
+        unchanged behavior) now both live inside AppMenu instead of being
+        split across an inline block here.
+      */}
+      <div className="mb-6">
+        <AppMenu />
+      </div>
 
       <header className="mb-12">
         <p className={eyebrowClass}>Federal funding intelligence</p>
