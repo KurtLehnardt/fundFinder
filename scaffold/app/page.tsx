@@ -30,7 +30,7 @@ export default function Home() {
           Federal funding intelligence
         </p>
         <h1 className="mt-4 max-w-2xl text-balance font-display text-[40px] font-bold leading-[1.08] text-structure-on-canvas sm:text-[52px]">
-          The money is already there.<br />Finding it is the hard part.
+          Grant funds are waiting<br />Let's find your match
         </h1>
         <p className="mt-5 max-w-xl text-pretty font-body text-[16px] leading-relaxed text-foreground">
           Describe your company the way you'd describe it to another founder. We'll translate it

@@ -107,11 +107,11 @@ export default function AppMenu() {
     : "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset";
 
   const signInLinkClass = design
-    ? "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "rounded-sm border border-rule bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+    ? "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "inline-flex min-h-[44px] items-center rounded-sm border border-rule bg-white px-4 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3">
+    <div className="flex items-center justify-between gap-3">
       <div ref={wrapRef} className="relative">
         <button
           type="button"
