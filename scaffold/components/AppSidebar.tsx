@@ -473,8 +473,8 @@ function SidebarSections() {
 
   return (
     <>
-      {/* 1 — Settings ------------------------------------------------------ */}
-      <Section id="settings" label="Settings">
+      {/* 1 — Auto Apply Settings ------------------------------------------- */}
+      <Section id="settings" label="Auto Apply Settings">
         <p className={noteClass}>
           Auto-apply requirements — stored on this device only, never sent to a server.
         </p>
