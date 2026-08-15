@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getAutoApplyRequirements,
   setAutoApplyRequirements,
@@ -199,9 +200,14 @@ export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
     ? "mt-6 border-t border-structure-on-canvas pt-4 font-body text-[11px] leading-relaxed text-foreground"
     : "mt-6 border-t border-rule pt-4 font-body text-[11px] leading-relaxed text-slate-550";
 
-  return (
+  // Rendered through a portal to document.body so the fixed overlay is a
+  // sibling of the app root, not a descendant of the opportunity card. This
+  // detaches it from the card's stacking/overflow context and guarantees the
+  // dialog opens as a viewport overlay (near the top), not "inside" the grant.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -435,7 +441,8 @@ export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
           government affiliation.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
