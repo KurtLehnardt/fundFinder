@@ -13,7 +13,7 @@ export async function embed(text: string): Promise<number[]> {
   const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: MODEL, input: text }),
+    body: JSON.stringify({ model: MODEL, dimensions: 512, input: text }),
   });
 
   if (!res.ok) throw new Error(`Embedding request failed (${res.status}): ${await res.text()}`);

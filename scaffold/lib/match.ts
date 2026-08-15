@@ -12,7 +12,7 @@ export const CALIBRATION = {
   /** Below this cosine similarity a program is never a candidate. */
   candidateFloor: 0.28,
   /** How many candidates go to Claude for scoring. */
-  candidateCount: 30,
+  candidateCount: 12,
   /** Below this LLM score, a match is not shown as likely/verify. */
   scoreFloor: 45,
   /** If fewer than this many matches clear scoreFloor, declare a weak field. */
