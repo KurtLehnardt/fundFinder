@@ -5,6 +5,11 @@ import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import SearchProgress from "@/components/SearchProgress";
+import PreSearchInterview from "@/components/PreSearchInterview";
+// Type-only: generateQuestions.ts imports the OpenAI SDK at runtime. A
+// type-only import is erased at compile time, so no server-only runtime
+// (or the OPENAI_API_KEY it reads) ever reaches this client bundle.
+import type { InterviewQuestion } from "@/lib/interview/generateQuestions";
 
 // FE-02 (R7.1): one honest, non-numeric one-liner per sample so the picker
 // reads as "fictional example companies," not a filter on the user's own
@@ -29,6 +34,18 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const [samplesOpen, setSamplesOpen] = useState(false);
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
+
+  // R1 (FE-03): pre-search interview. Off (default) = today's behavior
+  // EXACTLY — beginSearch() below short-circuits straight to run(), and
+  // interviewPhase never leaves "idle", so nothing new ever renders.
+  const interviewOn = isFlagEnabled("r1_interview");
+  const [interviewPhase, setInterviewPhase] = useState<"idle" | "generating" | "questions">("idle");
+  const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
+  // The exact description /api/interview generated questions for — captured
+  // at beginSearch() time, independent of subsequent edits to `text`, so
+  // PreSearchInterview's "Search anyway" always searches what the founder
+  // actually asked the interview about.
+  const [originalDescription, setOriginalDescription] = useState("");
 
   // r9_0_mockauth (CON-03): flag off -> no consent/delete UI, v1 path unchanged.
   // This control gates NOTHING server-side — the pipeline call below sends
@@ -108,8 +125,59 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     }
   }
 
-  // FE-02 (R7.1): picking a sample must flow through the same run() as a
-  // real submission (streaming, SearchProgress, caching — all untouched).
+  // R1 (FE-03): single entry point for both the CTA and the sample picker.
+  // Flag off -> straight to run(), unchanged. Flag on -> ask INT-01 for a
+  // cheap/fast set of routing questions first; any failure or an empty
+  // interview (description already resolves cleanly) falls back to run()
+  // directly so a broken interview never blocks the free path.
+  async function beginSearch(description: string) {
+    if (!interviewOn) {
+      run(description);
+      return;
+    }
+    setError(null);
+    setInterviewPhase("generating");
+    try {
+      const res = await fetch("/api/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      if (!res.ok) {
+        setInterviewPhase("idle");
+        run(description);
+        return;
+      }
+      const j = await res.json();
+      const questions: InterviewQuestion[] = Array.isArray(j?.questions) ? j.questions : [];
+      if (questions.length === 0) {
+        setInterviewPhase("idle");
+        run(description);
+        return;
+      }
+      setInterviewQuestions(questions);
+      setOriginalDescription(description);
+      setInterviewPhase("questions");
+    } catch {
+      // Network error / bad JSON — never block the free path.
+      setInterviewPhase("idle");
+      run(description);
+    }
+  }
+
+  function handleInterviewComplete(enrichedDescription: string) {
+    setInterviewPhase("idle");
+    run(enrichedDescription);
+  }
+
+  function handleInterviewSkip() {
+    setInterviewPhase("idle");
+    run(originalDescription);
+  }
+
+  // FE-02 (R7.1): picking a sample must flow through the same beginSearch()
+  // as a real submission (streaming, SearchProgress, caching, and now the
+  // R1 interview when the flag is on — all untouched/wired identically).
   // Only confirm-before-overwrite is new, and only when there's meaningful
   // user text already in the box.
   function selectSample(tc: (typeof TEST_CASES)[number]) {
@@ -119,7 +187,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     }
     setText(tc.text);
     setSamplesOpen(false);
-    run(tc.text);
+    beginSearch(tc.text);
   }
 
   const labelClass = design
@@ -183,6 +251,13 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     ? "mt-4 border-l-2 border-error bg-canvas-alt px-4 py-3 font-body text-sm text-foreground"
     : "mt-4 border-l-2 border-fit-adjacent bg-white px-4 py-3 font-body text-sm text-ink";
 
+  // R1 (FE-03): lightweight status while /api/interview is in flight — NOT
+  // the big SearchProgress bar, which is reserved for the expensive
+  // /api/match phase.
+  const interviewStatusClass = design
+    ? "mt-4 font-mono text-[12px] text-structure-on-canvas"
+    : "mt-4 font-mono text-[12px] text-federal";
+
   return (
     <div>
       <label htmlFor="co" className={labelClass}>Tell us about your company</label>
@@ -193,6 +268,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         rows={5}
         placeholder="What you build, who it's for, how many people, revenue, what you've raised, and how much you're looking for."
         className={textareaClass}
+        disabled={interviewPhase !== "idle"}
       />
 
       {mockAuthOn && (
@@ -233,15 +309,38 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => run(text)}
-          disabled={loading || text.trim().length < 20}
-          className={primaryButtonClass}
-        >
-          {loading ? "Searching…" : "Find opportunities"}
-        </button>
-      </div>
+      {interviewPhase === "idle" && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => beginSearch(text)}
+            disabled={loading || text.trim().length < 20}
+            className={primaryButtonClass}
+          >
+            {loading ? "Searching…" : "Find opportunities"}
+          </button>
+        </div>
+      )}
+
+      {/* R1 (FE-03): brief status while INT-01 generates routing questions.
+          Not the SearchProgress bar — that's reserved for /api/match. */}
+      {interviewPhase === "generating" && (
+        <p className={interviewStatusClass} role="status" aria-live="polite">
+          Preparing a few quick questions…
+        </p>
+      )}
+
+      {/* R1 (FE-03): inline (non-modal) interview — questions phase, then an
+          editable review of the enriched description, before the expensive
+          /api/match search fires. "Search anyway" always available. */}
+      {interviewPhase === "questions" && (
+        <PreSearchInterview
+          questions={interviewQuestions}
+          originalDescription={originalDescription}
+          design={design}
+          onComplete={handleInterviewComplete}
+          onSkip={handleInterviewSkip}
+        />
+      )}
 
       {loading && (
         <SearchProgress design={design} realPct={progress?.pct} realLabel={progress?.label} />
@@ -250,40 +349,42 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       {/* FE-02 (R7.1): sample-company picker — a real visual break (border-t
           + vertical space) separates this from the user's own description,
           so it reads as "try an example," not a filter on their business. */}
-      <div className={sampleSectionClass}>
-        <button
-          type="button"
-          onClick={() => setSamplesOpen((open) => !open)}
-          aria-expanded={samplesOpen}
-          disabled={loading}
-          className={sampleTriggerClass}
-        >
-          {samplesOpen ? "Hide sample companies" : "See a sample company"}
-        </button>
+      {interviewPhase === "idle" && (
+        <div className={sampleSectionClass}>
+          <button
+            type="button"
+            onClick={() => setSamplesOpen((open) => !open)}
+            aria-expanded={samplesOpen}
+            disabled={loading}
+            className={sampleTriggerClass}
+          >
+            {samplesOpen ? "Hide sample companies" : "See a sample company"}
+          </button>
 
-        {samplesOpen && (
-          <div className={samplePanelClass}>
-            <p className={samplePanelIntroClass}>
-              These are fictional example companies — pick one to see how fundFinder works.
-            </p>
-            <ul className="mt-3 flex flex-col gap-2">
-              {TEST_CASES.map((tc) => (
-                <li key={tc.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectSample(tc)}
-                    disabled={loading}
-                    className={sampleItemClass}
-                  >
-                    <span className={sampleItemLabelClass}>{tc.label}</span>
-                    <span className={sampleItemBlurbClass}>{SAMPLE_BLURBS[tc.id]}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+          {samplesOpen && (
+            <div className={samplePanelClass}>
+              <p className={samplePanelIntroClass}>
+                These are fictional example companies — pick one to see how fundFinder works.
+              </p>
+              <ul className="mt-3 flex flex-col gap-2">
+                {TEST_CASES.map((tc) => (
+                  <li key={tc.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectSample(tc)}
+                      disabled={loading}
+                      className={sampleItemClass}
+                    >
+                      <span className={sampleItemLabelClass}>{tc.label}</span>
+                      <span className={sampleItemBlurbClass}>{SAMPLE_BLURBS[tc.id]}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <p className={errorClass}>
