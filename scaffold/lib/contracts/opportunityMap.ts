@@ -1,12 +1,31 @@
 import { z } from "zod";
 import { OpportunitySchema } from "./opportunity";
+import { EligibilityDeterminationSchema } from "./eligibilityDetermination";
 
 /**
  * §3.6 — OpportunityMap (the existing v1 output schema, formalized + versioned)
  *
  * This formalizes the exact shape `lib/match.ts` `buildOpportunityMap()`
- * returns today and the shape frozen into `data/precomputed.json`. The only
- * addition is an OPTIONAL `version` tag (§3.6 "Version it now; it will change").
+ * returns today and the shape frozen into `data/precomputed.json`, RECONCILED
+ * (schema-reconcile) against what the live builder actually produces:
+ *
+ *   1. Two ADDITIVE fields the live map carries that v1 never declared —
+ *      `matches[].eligibility` (ELG-04) and top-level `costDebug` (R4b) — are
+ *      now declared as OPTIONAL fields (see `EligibilityDeterminationWithFreshnessSchema`
+ *      and `SearchCostDebugSchema` below). Optional keeps cached/precomputed
+ *      maps, which lack both, still validating (CON-01's "additive, must not
+ *      break the cached responses").
+ *   2. The four narrative `Match` strings (`whyFit`, `whyIneligible`,
+ *      `whatToVerify`, `whatToDoNext`) were `z.string()` (required), but
+ *      `lib/match.ts` assigns them straight from an unvalidated LLM JSON
+ *      response (`parseJson()` in `lib/claude.ts` is a raw `JSON.parse` +
+ *      cast — no zod backstop), so any of the four can legitimately be
+ *      `undefined` on a real map (e.g. a clear-fit match the model judged to
+ *      have nothing "ineligible" to report). Reproduced directly against
+ *      `MatchSchema`: all four fail identically when omitted. They are
+ *      display strings, not eligibility gates, so they now `.default("")`
+ *      instead of being required — present-as-string for consumers, but no
+ *      longer a validation failure on a real live map.
  *
  * Why `version` is optional, not defaulted-to-required: the cached responses in
  * `data/precomputed.json` have no `version` field, and `lib/match.ts` returns
@@ -76,18 +95,94 @@ export const AwardHistorySchema = z.object({
 });
 export type AwardHistory = z.infer<typeof AwardHistorySchema>;
 
+/**
+ * ELG-02 — `FreshnessAnnotation`, mirrored from `lib/eligibility/freshness.ts`'s
+ * interface of the same name. Exact field-for-field match (not a passthrough):
+ * that module is pure/stable and this schema is cheap to keep in sync with it.
+ */
+export const FreshnessAnnotationSchema = z.object({
+  data_as_of: z.string().nullable(),
+  is_stale: z.boolean(),
+  caveat: z.string().nullable(),
+  assessed_at: z.string(),
+});
+
+/**
+ * ELG-04 — `EligibilityDeterminationWithFreshness`, mirrored from
+ * `lib/eligibility/freshness.ts`. `determination` reuses the existing
+ * `EligibilityDeterminationSchema` (§3.5) verbatim — including its R8.2/R8.4
+ * anti-fabrication `.refine()`s — rather than a loose/passthrough shape, so an
+ * attached `eligibility` is validated exactly as strictly as `screen()`'s own
+ * `EligibilityDeterminationSchema.parse()` backstop validates it upstream
+ * (`lib/eligibility/screen.ts`). No anti-fabrication guarantee is weakened by
+ * declaring this field: it is additive-optional so maps without it (cached/
+ * precomputed) still validate, and maps WITH it get the full determination
+ * validation for free.
+ */
+export const EligibilityDeterminationWithFreshnessSchema = z.object({
+  determination: EligibilityDeterminationSchema,
+  freshness: FreshnessAnnotationSchema,
+});
+
 export const MatchSchema = z.object({
   opportunity: OpportunitySchema,
   tier: TierSchema,
   score: z.number(),
   criteria: z.array(CriterionCheckSchema),
-  whyFit: z.string(),
-  whyIneligible: z.string(),
-  whatToVerify: z.string(),
-  whatToDoNext: z.string(),
+  // Narrative display strings written by an LLM whose JSON response is never
+  // itself schema-validated (`lib/claude.ts` `parseJson()` is a raw parse +
+  // cast). A real map can legitimately omit any of these four (e.g. a
+  // clear-fit match has nothing "ineligible" to report) — reproduced directly
+  // against this schema, see the module doc comment above. `.default("")`
+  // keeps them present-as-strings for consumers (cards can render an empty
+  // string safely) without making a live map fail boundary validation. These
+  // are NOT eligibility gates — `eligibility` below is the sole gated field,
+  // and its schema keeps every anti-fabrication refinement intact.
+  whyFit: z.string().default(""),
+  whyIneligible: z.string().default(""),
+  whatToVerify: z.string().default(""),
+  whatToDoNext: z.string().default(""),
   history: AwardHistorySchema.optional(),
+  /**
+   * ELG-04 (`lib/types.ts` `Match.eligibility`) — attached by
+   * `buildOpportunityMap()` (`lib/match.ts`) for every match, DEFENSIVELY (a
+   * screening failure just omits the field for that one match). OPTIONAL so
+   * cached/precomputed maps, which predate ELG-04 and never carry it, keep
+   * validating unchanged.
+   */
+  eligibility: EligibilityDeterminationWithFreshnessSchema.optional(),
 });
 export type Match = z.infer<typeof MatchSchema>;
+
+/**
+ * R4b — `StageCost` / `SearchCostDebug`, mirrored from `lib/metering/meter.ts`.
+ * Loose-but-typed rather than `.passthrough()`: `CostMeter` is internally
+ * defensive (never throws, `safeNumber()` coerces bad usage data to `0`) but
+ * is NOT itself a validated boundary, and this data never drives any
+ * eligibility/exclusion decision — it is purely informational cost telemetry
+ * gated behind the `r4b_cost_debug` flag before it ever reaches a client. A
+ * mirrored shape (vs. `.passthrough()`) still catches a genuinely malformed
+ * `costDebug` at the boundary-validation log line this schema backs.
+ */
+export const StageCostSchema = z.object({
+  stage: z.string(),
+  provider: z.enum(["anthropic", "openai"]),
+  model: z.string(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheCreationInputTokens: z.number().optional(),
+  cacheReadInputTokens: z.number().optional(),
+  costUsd: z.number(),
+  latencyMs: z.number(),
+  calls: z.number(),
+});
+
+export const SearchCostDebugSchema = z.object({
+  stages: z.array(StageCostSchema),
+  totalCostUsd: z.number(),
+  totalLatencyMs: z.number(),
+  pricingAsOf: z.string(),
+});
 
 export const OpportunityMapSchema = z.object({
   profile: StartupProfileSchema,
@@ -119,5 +214,12 @@ export const OpportunityMapSchema = z.object({
    * remain valid; stamp it with `CURRENT_OPPORTUNITY_MAP_VERSION` on new writes.
    */
   version: z.string().optional(),
+  /**
+   * R4b (`lib/types.ts` `OpportunityMap.costDebug`) — attached by
+   * `buildOpportunityMap()`'s `finalizeCost()` (`lib/match.ts`) ONLY when the
+   * `r4b_cost_debug` flag is on. OPTIONAL so cached/precomputed maps and every
+   * live map with the flag off (the default) keep validating without it.
+   */
+  costDebug: SearchCostDebugSchema.optional(),
 });
 export type OpportunityMap = z.infer<typeof OpportunityMapSchema>;
