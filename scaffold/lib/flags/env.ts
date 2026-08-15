@@ -27,6 +27,7 @@ export function readRawOverrides(): Record<FlagName, string | undefined> {
     r8_eligibility: process.env.NEXT_PUBLIC_FLAG_R8_ELIGIBILITY,
     // Matches the mock-auth drop-in's own env var — see registry.ts's r9_0_mockauth entry.
     r9_0_mockauth: process.env.NEXT_PUBLIC_MOCK_AUTH,
+    r9_supabase_auth: process.env.NEXT_PUBLIC_FLAG_R9_SUPABASE_AUTH,
     r10_analytics: process.env.NEXT_PUBLIC_FLAG_R10_ANALYTICS,
   };
 }

@@ -10,10 +10,16 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { isFlagEnabled } from '@/lib/flags';
 
 export default function LoginPage() {
   const { user, loading, signIn } = useAuth();
   const router = useRouter();
+
+  // With real Supabase auth on, "Continue with Google" is a genuine OAuth
+  // redirect — so drop the "Demo mode" badge and the "simulated sign-in" copy,
+  // which are only true for the mock. Everything else stays as-is.
+  const realAuth = isFlagEnabled('r9_supabase_auth');
 
   // Already signed in? Skip the screen.
   useEffect(() => {
@@ -30,10 +36,13 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f9f9f9] px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]">
-        {/* Demo badge — judges should never wonder whether this is real Google auth. */}
-        <span className="mb-6 inline-block rounded-full bg-[#ecf1f7] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#005ea2]">
-          Demo mode
-        </span>
+        {/* Demo badge — judges should never wonder whether this is real Google
+            auth. Shown only for the mock backend; real OAuth drops it. */}
+        {!realAuth && (
+          <span className="mb-6 inline-block rounded-full bg-[#ecf1f7] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#005ea2]">
+            Demo mode
+          </span>
+        )}
 
         <h1 className="text-pretty text-2xl font-semibold text-[#212121]">
           Sign in to fundFinder
@@ -51,10 +60,12 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="mt-4 text-center text-xs leading-relaxed text-[#5b616b]">
-          Simulated sign-in for demo purposes. No Google account is contacted and
-          no credentials are collected.
-        </p>
+        {!realAuth && (
+          <p className="mt-4 text-center text-xs leading-relaxed text-[#5b616b]">
+            Simulated sign-in for demo purposes. No Google account is contacted and
+            no credentials are collected.
+          </p>
+        )}
       </div>
     </main>
   );
