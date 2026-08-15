@@ -8,7 +8,7 @@ import type { CostMeter } from "./metering/meter";
  */
 const MODEL = "text-embedding-3-small";
 
-export async function embed(text: string, meter?: CostMeter): Promise<number[]> {
+export async function embed(text: string, meter?: CostMeter, signal?: AbortSignal): Promise<number[]> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
 
@@ -17,6 +17,7 @@ export async function embed(text: string, meter?: CostMeter): Promise<number[]> 
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({ model: MODEL, dimensions: 512, input: text }),
+    signal,
   });
 
   if (!res.ok) throw new Error(`Embedding request failed (${res.status}): ${await res.text()}`);

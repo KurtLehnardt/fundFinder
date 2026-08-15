@@ -658,3 +658,93 @@ test("[edge] SBIR opp + predicate-less model_inferred rules + unknown ownership 
   assert.equal(d.failed_rules.length, 0);
   assert.ok(d.unknown_rules.some((r) => r.rule_id === "universal-sbir-ownership"));
 });
+
+// ---------------------------------------------------------------------------
+// [ADDED] uei_required predicate — eligible / excluded / unknown branches
+// ---------------------------------------------------------------------------
+
+test("[added] uei_required predicate: present → eligible, empty → excluded, absent → unknown", () => {
+  const rule = verifiedRule({
+    id: "rule-uei-required",
+    category: "registration",
+    description: "Applicants must have an active Unique Entity Identifier (UEI).",
+    predicate: { kind: "uei_required" },
+  });
+
+  // SAM already registered too, so the universal registration step doesn't
+  // itself hold the bucket down to `conditionally_eligible` here — this case
+  // isolates the uei_required predicate's own pass verdict.
+  const eligible = assertSafe(
+    screen(
+      profile({
+        uei: pf("ABC123XYZ01", "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(eligible.bucket, "eligible");
+
+  const excluded = assertSafe(screen(profile({ uei: pf("", "user_stated") }), opp(), [rule]));
+  assert.equal(excluded.bucket, "excluded");
+  assert.equal(excluded.failed_rules.length, 1);
+  assert.equal(excluded.failed_rules[0].rule_id, "rule-uei-required");
+
+  const unsettled = assertSafe(screen(profile(), opp(), [rule]));
+  assert.equal(unsettled.bucket, "unknown");
+  assert.ok(unsettled.unknown_rules.some((r) => r.rule_id === "rule-uei-required"));
+});
+
+// ---------------------------------------------------------------------------
+// [ADDED] certification_required — FAIL branch (no overlapping certification)
+// ---------------------------------------------------------------------------
+
+test("[added] certification_required predicate: held certifications don't overlap any_of → excluded", () => {
+  const rule = verifiedRule({
+    id: "rule-8a-only",
+    category: "program_specific",
+    description: "Reserved for 8(a) participants.",
+    predicate: { kind: "certification_required", any_of: ["8a"] },
+  });
+  const d = assertSafe(
+    screen(
+      profile({ certifications: pf(["hubzone", "wosb"], "user_stated") }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(d.bucket, "excluded");
+  assert.equal(d.failed_rules.length, 1);
+  assert.equal(d.failed_rules[0].rule_id, "rule-8a-only");
+});
+
+// ---------------------------------------------------------------------------
+// [ADDED] Bucket precedence — unknown outranks a pending conditional step
+// ---------------------------------------------------------------------------
+
+test("[added] an unresolved hard gate (unknown) outranks a pending SAM.gov step — and the step still shows", () => {
+  const rule = verifiedRule({
+    id: "rule-highered-precedence",
+    category: "entity_type",
+    description: "This program is limited to institutions of higher education.",
+    predicate: { kind: "entity_type_in", allowed: ["higher_education"] },
+  });
+  const d = assertSafe(
+    screen(
+      profile({
+        sam_registered: pf(false, "user_stated"), // triggers the universal conditional step
+        // entity_type intentionally unset → unresolved reviewed hard gate → unknown
+      }),
+      opp(), // non-SBIR — only the universal SAM.gov conditional gate + this rule apply
+      [rule],
+    ),
+  );
+  assert.equal(d.bucket, "unknown");
+  assert.notEqual(d.bucket, "conditionally_eligible");
+  assert.ok(d.unknown_rules.some((r) => r.rule_id === "rule-highered-precedence"));
+  // Precedence outranks the step for the BUCKET, but the step itself must
+  // still be surfaced — it isn't cleared, just not what decides the bucket.
+  assert.equal(d.required_steps.length, 1);
+  assert.match(d.required_steps[0].step, /SAM\.gov/);
+});

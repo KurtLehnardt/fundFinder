@@ -111,6 +111,10 @@ export default function OpportunityMap({ map }: { map: MapT }) {
           determination: m.eligibility!.determination,
           title: m.opportunity?.title ?? m.opportunity?.program,
           agency: m.opportunity?.agency,
+          // ELG-02: carry the freshness caveat through so a stale/unverified
+          // determination is visibly flagged rather than dropped (§4.5/§11).
+          // `caveat` is null when the determination is fresh.
+          caveat: m.eligibility!.freshness?.caveat ?? null,
         }))
     : [];
 

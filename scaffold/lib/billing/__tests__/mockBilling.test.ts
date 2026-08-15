@@ -52,4 +52,8 @@ describe("mockBilling", () => {
     assert.equal(typeof globalThis.window, "undefined");
     assert.equal(getBillingTier(), "free");
   });
+
+  test("[added] billingFeatures degrades an unrecognized tier value to the Free bundle", () => {
+    assert.deepEqual(billingFeatures("gold" as any), BILLING_TIERS[0].features);
+  });
 });

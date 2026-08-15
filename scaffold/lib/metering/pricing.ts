@@ -55,6 +55,13 @@ export const PRICE_TABLE: Record<string, ModelPrice> = {
     inputPerToken: 3 / 1_000_000, // $3 / MTok
     outputPerToken: 15 / 1_000_000, // $15 / MTok
   },
+  // Claude Haiku 4.5 — the cheap-model route for `profile_extraction`
+  // (lib/claude.ts CHEAP_MODEL). Anthropic pricing page (retrieved 2026-08-15):
+  // Base Input $1 / MTok, Output $5 / MTok.
+  "claude-haiku-4-5-20251001": {
+    inputPerToken: 1 / 1_000_000, // $1 / MTok
+    outputPerToken: 5 / 1_000_000, // $5 / MTok
+  },
   "text-embedding-3-small": {
     inputPerToken: 0.02 / 1_000_000, // $0.02 / MTok
     // No outputPerToken: embeddings have no output tokens.

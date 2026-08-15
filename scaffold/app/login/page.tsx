@@ -67,7 +67,7 @@ export default function LoginPage() {
         <h1 className="text-pretty text-2xl font-semibold text-foreground">
           Sign in to {BRAND}
         </h1>
-        <p className="mt-2 text-pretty text-sm leading-relaxed text-foreground/70">
+        <p className="mt-2 text-pretty text-sm leading-relaxed text-foreground">
           Find federal funding your company can actually apply for.
         </p>
 
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 onChange={() => setMode('google')}
                 className="peer sr-only"
               />
-              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground/70 transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
+              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:font-semibold peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
                 Real account
               </span>
             </label>
@@ -99,7 +99,7 @@ export default function LoginPage() {
                 onChange={() => setMode('demo')}
                 className="peer sr-only"
               />
-              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground/70 transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
+              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:font-semibold peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
                 Judge demo
               </span>
             </label>
@@ -125,7 +125,7 @@ export default function LoginPage() {
           </button>
         )}
 
-        <p className="mt-4 text-center text-xs leading-relaxed text-foreground/70">
+        <p className="mt-4 text-center text-xs leading-relaxed text-foreground">
           {mode === 'google'
             ? realAuth
               ? 'Sign in with your real Google account.'

@@ -288,7 +288,15 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           Auto Apply
         </button>
         <span className={autoApplyHintClass}>
-          {autoApplyUnlocked ? "Included in your plan (preview)" : <>Pro feature &middot; not available yet</>}
+          {autoApplyUnlocked ? (
+            // The hint must match what clicking actually opens: the walkable
+            // preview (r6 on) vs. the "not live yet" modal (r6 off). Claiming
+            // "included in your plan" while the modal says "not available yet"
+            // was the contradiction (frontend review MEDIUM).
+            assistedApplyFlow ? "Included in your plan (preview)" : <>In your plan &middot; not live yet</>
+          ) : (
+            <>Pro feature &middot; not available yet</>
+          )}
         </span>
       </div>
 
@@ -325,7 +333,13 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           )}
 
           <Section design={design} title="Why we think you're a fit" body={m.whyFit} />
-          <Section design={design} title="What could make you ineligible" body={ineligible} accent />
+          <Section
+            design={design}
+            title="What could make you ineligible"
+            body={ineligible}
+            accent
+            note="Model assessment — a generated read on possible concerns, not a cited rule or a formal eligibility determination. Confirm requirements with the program officer."
+          />
           <Section design={design} title="What you should verify" body={m.whatToVerify} />
 
           {m.history && (
@@ -354,7 +368,10 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                   Analyze competing companies
                 </button>
                 <span className={competitorHintClass}>
-                  {competitorUnlocked ? "Included in your plan (preview)" : <>Pro feature &middot; not available yet</>}
+                  {/* Same honesty fix as Auto Apply: the competitor stub opens
+                      the "not live yet" upsell modal, so an unlocked tier must
+                      not claim the analysis is usable. */}
+                  {competitorUnlocked ? <>In your plan &middot; not live yet</> : <>Pro feature &middot; not available yet</>}
                 </span>
               </div>
 
@@ -402,17 +419,24 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   );
 }
 
-function Section({ title, body, accent, design }: { title: string; body?: string; accent?: boolean; design: boolean }) {
+function Section({ title, body, accent, design, note }: { title: string; body?: string; accent?: boolean; design: boolean; note?: string }) {
   if (!body || !body.trim()) return null;
   // Ineligibility factors are a blocking/cautionary signal -> `error`, used
   // here as a 2px left border (non-text, 3:1 threshold — passes; see the
   // TIER_BADGE comment for why the same tokens can't be bare small text).
   const accentClass = accent ? (design ? "border-l-2 border-error pl-4" : "border-l-2 border-fit-verify pl-4") : "";
   const bodyClass = design ? "text-pretty font-body text-[14px] leading-relaxed text-foreground" : "font-body text-[14px] leading-relaxed";
+  // Provenance note (R8.4 spirit): mark uncited model-recall blocks as a model
+  // assessment so a generated concern doesn't read as an authoritative,
+  // rule-grounded determination — mirrors EligibilityBuckets' ProvenanceNote.
+  const noteClass = design
+    ? "mt-1.5 font-body text-[11px] italic leading-relaxed text-foreground"
+    : "mt-1.5 font-body text-[11px] italic leading-relaxed text-slate-550";
   return (
     <div className={`mb-5 ${accentClass}`}>
       <p className={eyebrowClass(design, "mb-1.5")}>{title}</p>
       <p className={bodyClass}>{body}</p>
+      {note && <p className={noteClass}>{note}</p>}
     </div>
   );
 }
