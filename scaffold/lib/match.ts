@@ -57,9 +57,22 @@ function historyFor(oppId: string, state?: string): AwardHistory | undefined {
   };
 }
 
-export async function buildOpportunityMap(description: string): Promise<OpportunityMap> {
+/** A real pipeline milestone, streamed to the client so the loading bar can
+ *  reflect actual progress (not just a timer). `pct` is the fraction complete
+ *  once this step has finished. */
+export type StepEvent = { key: string; label: string; pct: number; detail?: string };
+
+export async function buildOpportunityMap(
+  description: string,
+  onStep?: (e: StepEvent) => void,
+): Promise<OpportunityMap> {
+  // Progress is best-effort: a reporting error must never fail the search.
+  const step = (e: StepEvent) => { try { onStep?.(e); } catch { /* ignore */ } };
+  step({ key: "start", label: "Reading the federal register…", pct: 5 });
+
   // 1 + 2. Intake and adaptive follow-ups.
   const { profile, followUps } = await extractProfile(description);
+  step({ key: "profile", label: "Understood your company", pct: 18 });
 
   // 3. Semantic expansion — embed the founder profile plus expanded gov terms.
   const queryText = [
@@ -71,6 +84,7 @@ export async function buildOpportunityMap(description: string): Promise<Opportun
     (profile.expandedTerms ?? []).join(", "),
   ].filter(Boolean).join("\n");
   const queryVec = await embed(queryText);
+  step({ key: "embed", label: "Searching 476 programs", pct: 32 });
 
   // 4. Hybrid retrieval: rules gate, then similarity, then LLM scoring.
   const scored = (corpus as unknown as Opportunity[])
@@ -79,12 +93,16 @@ export async function buildOpportunityMap(description: string): Promise<Opportun
     .filter((x) => x.sim >= CALIBRATION.candidateFloor)
     .sort((a, b) => b.sim - a.sim)
     .slice(0, CALIBRATION.candidateCount);
+  step({ key: "retrieve", label: `Found ${scored.length} candidate programs`, pct: 46 });
 
   if (scored.length === 0) {
+    step({ key: "weak", label: "Writing your finding…", pct: 80 });
     return weakField(profile, followUps);
   }
 
+  step({ key: "score", label: "Scoring and explaining your matches", pct: 52 });
   const assessments = await explainMatches(profile, scored.map((s) => s.o));
+  step({ key: "assemble", label: "Writing your opportunity map", pct: 90 });
   const byId = new Map(scored.map((s) => [s.o.id, s.o]));
 
   const matches: Match[] = assessments
