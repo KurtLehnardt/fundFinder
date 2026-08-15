@@ -498,3 +498,163 @@ test("the ONLY excluding scenarios are reviewed-rule + trustworthy-fail — and 
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// ELG-03 additive edge cases (fixture-only) — strengthen coverage without
+// weakening any existing assertion. Mirror the shapes ELG-03's live-DB
+// integration test exercises, plus a few untested predicate branches.
+// ---------------------------------------------------------------------------
+
+test("[edge] DB-shaped per-opp rule (model_inferred, NO predicate, _origin per_opp) is advisory — never gates", () => {
+  // This is exactly how a real `eligibility_rules` row maps into the engine:
+  // model_inferred prose, no structured predicate, _origin "per_opp".
+  const dbRule = inferredRule({
+    id: "db-rule-1",
+    category: "program_specific",
+    description: "Applicants should demonstrate a strong commercialization plan.",
+    predicate: undefined as never,
+    _origin: "per_opp",
+  });
+  const d = assertSafe(
+    screen(
+      profile({
+        entity_type: pf("for_profit_small_business", "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      [dbRule],
+    ),
+  );
+  // Predicate-less model_inferred prose must never downgrade a clear opp, and
+  // must appear in neither failed_rules nor unknown_rules.
+  assert.equal(d.bucket, "eligible");
+  assert.equal(d.failed_rules.length, 0);
+  assert.ok(!d.unknown_rules.some((r) => r.rule_id === "db-rule-1"));
+});
+
+test("[edge] a whole SET of predicate-less model_inferred rules never excludes (mirrors real corpus)", () => {
+  const rules = [
+    inferredRule({ id: "mi-a", category: "entity_type", description: "Open to firms in the sector.", predicate: undefined as never, _origin: "per_opp" }),
+    inferredRule({ id: "mi-b", category: "geography", description: "Preference for domestic applicants.", predicate: undefined as never, _origin: "per_opp" }),
+    inferredRule({ id: "mi-c", category: "other", description: "Cost-share may apply.", predicate: undefined as never, _origin: "per_opp" }),
+  ];
+  const d = assertSafe(
+    screen(
+      profile({
+        entity_type: pf("nonprofit", "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      rules,
+    ),
+  );
+  assert.notEqual(d.bucket, "excluded");
+  assert.equal(d.failed_rules.length, 0);
+});
+
+test("[edge] entity_type_not_in — reviewed disallow match → excluded; miss → eligible", () => {
+  const rule = verifiedRule({
+    id: "rule-not-individual",
+    category: "entity_type",
+    description: "Individuals are not eligible to apply.",
+    predicate: { kind: "entity_type_not_in", disallowed: ["individual"] },
+  });
+  const excluded = assertSafe(
+    screen(profile({ entity_type: pf("individual", "user_stated") }), opp(), [rule]),
+  );
+  assert.equal(excluded.bucket, "excluded");
+  assert.equal(excluded.failed_rules[0].rule_id, "rule-not-individual");
+
+  const ok = assertSafe(
+    screen(
+      profile({
+        entity_type: pf("for_profit_small_business", "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(ok.bucket, "eligible");
+});
+
+test("[edge] max_employees boundary — count == max passes; count == max+1 (reviewed) excludes", () => {
+  const rule = verifiedRule({
+    id: "rule-max-50",
+    category: "size_ownership",
+    description: "Applicants must have no more than 50 employees.",
+    predicate: { kind: "max_employees", max: 50 },
+  });
+  const atLimit = assertSafe(
+    screen(
+      profile({
+        employee_count: pf(50, "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(atLimit.bucket, "eligible"); // <= max is a pass
+
+  const overLimit = assertSafe(
+    screen(profile({ employee_count: pf(51, "user_stated") }), opp(), [rule]),
+  );
+  assert.equal(overLimit.bucket, "excluded");
+  assert.equal(overLimit.failed_rules[0].rule_id, "rule-max-50");
+});
+
+test("[edge] geography_in designation — reviewed mismatch → excluded; match → eligible; free-text only → unknown", () => {
+  const rule = verifiedRule({
+    id: "rule-hubzone",
+    category: "geography",
+    description: "Located in a HUBZone.",
+    predicate: { kind: "geography_in", allowed_designations: ["hubzone"] },
+  });
+  const mismatch = assertSafe(
+    screen(
+      profile({ geography_designations: pf(["rural"], "user_stated") }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(mismatch.bucket, "excluded");
+  assert.equal(mismatch.failed_rules[0].rule_id, "rule-hubzone");
+
+  const match = assertSafe(
+    screen(
+      profile({
+        geography_designations: pf(["HUBZone"], "user_stated"), // case-insensitive
+        sam_registered: pf(true, "user_stated"),
+      }),
+      opp(),
+      [rule],
+    ),
+  );
+  assert.equal(match.bucket, "eligible");
+
+  // No designations at all → the gate is indeterminate → unknown (never a guess).
+  const unsettled = assertSafe(screen(profile(), opp(), [rule]));
+  assert.equal(unsettled.bucket, "unknown");
+});
+
+test("[edge] SBIR opp + predicate-less model_inferred rules + unknown ownership → unknown, failed empty", () => {
+  const dbRules = [
+    inferredRule({ id: "sbir-mi-1", category: "program_specific", description: "Phase I topic scope.", predicate: undefined as never, _origin: "per_opp" }),
+  ];
+  const d = assertSafe(
+    screen(
+      profile({
+        entity_type: pf("for_profit_small_business", "user_stated"),
+        employee_count: pf(10, "user_stated"),
+        sam_registered: pf(true, "user_stated"),
+        // us_owned intentionally UNKNOWN → universal SBIR ownership gate → unknown
+      }),
+      SBIR_OPP(),
+      dbRules,
+    ),
+  );
+  assert.equal(d.bucket, "unknown");
+  assert.equal(d.failed_rules.length, 0);
+  assert.ok(d.unknown_rules.some((r) => r.rule_id === "universal-sbir-ownership"));
+});
