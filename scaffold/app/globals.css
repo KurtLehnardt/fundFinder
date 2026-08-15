@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+body {
+  background: theme('colors.paper');
+  color: theme('colors.ink');
+  -webkit-font-smoothing: antialiased;
+}
+
+.eyebrow {
+  @apply font-mono text-[11px] uppercase tracking-eyebrow text-slate-550;
+}
+
+.spine { @apply absolute left-0 top-0 h-full w-[3px]; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+.reveal { animation: rise .4s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
