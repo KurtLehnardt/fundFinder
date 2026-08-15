@@ -134,7 +134,13 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // interview (description already resolves cleanly) falls back to run()
   // directly so a broken interview never blocks the free path.
   async function beginSearch(description: string) {
-    if (!interviewOn) {
+    // Only interview when the description is TOO SHORT to route cleanly. A
+    // detailed prompt (enough words, or 3+ sentences) skips straight to search
+    // — no "preparing questions" flash when there's nothing worth asking.
+    const words = description.trim().split(/\s+/).filter(Boolean).length;
+    const sentences = (description.match(/[.!?]+/g) ?? []).length;
+    const detailedEnough = words >= 25 || sentences >= 3;
+    if (!interviewOn || detailedEnough) {
       run(description);
       return;
     }
@@ -274,7 +280,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={5}
-        placeholder="What you build, who it's for, how many people, revenue, what you've raised, and how much you're looking for."
+        placeholder="Please enter at least three sentences to get accurate results — what you build, who it's for, your size, revenue, what you've raised, and how much you need."
         className={textareaClass}
         disabled={interviewPhase !== "idle"}
       />
