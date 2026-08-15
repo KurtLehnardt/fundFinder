@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TEST_CASES } from "@/lib/testCases";
 import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
+import { useAnalytics } from "@/components/AnalyticsProvider";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import { BRAND } from "@/lib/brand";
@@ -80,6 +81,35 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const { consent, setConsent, signOut } = useAuth();
   const [justCleared, setJustCleared] = useState(false);
 
+  // H5 (R10.1) — funnel analytics. All emits no-op unless r10_analytics is on
+  // (gating lives in track()); nothing here changes flag-off behavior.
+  const analytics = useAnalytics();
+  // run_abandoned ("the single most important event", R10.1): the epoch ms a
+  // /api/match search started, or null when none is in flight. A ref (not
+  // state) so the pagehide/unmount listener reads the live value without a
+  // stale closure and without re-subscribing on every render.
+  const searchStartRef = useRef<number | null>(null);
+  const analyticsRef = useRef(analytics);
+  analyticsRef.current = analytics;
+
+  useEffect(() => {
+    // If a search is still in flight when the user navigates away / closes the
+    // tab (pagehide, incl. bfcache) or this form unmounts, that's an abandoned
+    // run — emit it with elapsed time. Guarded to fire at most once per search.
+    const abandonIfPending = () => {
+      const start = searchStartRef.current;
+      if (start != null) {
+        searchStartRef.current = null;
+        analyticsRef.current.runAbandoned(Date.now() - start);
+      }
+    };
+    window.addEventListener("pagehide", abandonIfPending);
+    return () => {
+      window.removeEventListener("pagehide", abandonIfPending);
+      abandonIfPending();
+    };
+  }, []);
+
   function handleDeleteMyData() {
     clearAllLocalData();
     // clearAllLocalData only touches localStorage — resync the in-memory auth
@@ -96,6 +126,10 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     setError(null);
     setProgress(null);
     setLastSearched(description);
+    // H5: search start + mark a run in flight (for run_abandoned). No description
+    // content is sent — the event is a name + timestamp only.
+    searchStartRef.current = Date.now();
+    analytics.searchStarted();
     try {
       const res = await fetch("/api/match", {
         method: "POST",
@@ -166,6 +200,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     } finally {
       setLoading(false);
       setProgress(null);
+      // The run finished (result or error) — it can no longer be "abandoned".
+      searchStartRef.current = null;
     }
   }
 
@@ -208,6 +244,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       setInterviewQuestions(questions);
       setOriginalDescription(description);
       setInterviewPhase("questions");
+      // H5: the pre-search interview was shown (count only, no content).
+      analytics.interviewShown({ questions: questions.length });
     } catch {
       // Network error / bad JSON — never block the free path.
       setInterviewPhase("idle");
