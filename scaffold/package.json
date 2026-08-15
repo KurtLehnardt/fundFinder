@@ -27,7 +27,7 @@
     "cost:measure": "node --import tsx scripts/cost-measure.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
+    "@anthropic-ai/sdk": "^0.33.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "next": "14.2.15",
