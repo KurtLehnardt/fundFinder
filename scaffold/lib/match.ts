@@ -131,6 +131,7 @@ export async function buildOpportunityMap(
   description: string,
   onStep?: (e: StepEvent) => void,
   deps: Partial<BuildDeps> = {},
+  signal?: AbortSignal,
 ): Promise<OpportunityMap> {
   const d: BuildDeps = { ...REAL_DEPS, ...deps };
   // Progress is best-effort: a reporting error must never fail the search.
@@ -143,7 +144,7 @@ export async function buildOpportunityMap(
   const meter = createCostMeter();
 
   // 1 + 2. Intake and adaptive follow-ups.
-  const { profile, followUps } = await d.extractProfile(description, meter);
+  const { profile, followUps } = await d.extractProfile(description, meter, signal);
   step({ key: "profile", label: "Understood your company", pct: 18 });
 
   // 3. Semantic expansion — embed the founder profile plus expanded gov terms.
@@ -155,7 +156,7 @@ export async function buildOpportunityMap(
     profile.targetCustomers,
     (profile.expandedTerms ?? []).join(", "),
   ].filter(Boolean).join("\n");
-  const queryVec = await d.embed(queryText, meter);
+  const queryVec = await d.embed(queryText, meter, signal);
   step({ key: "embed", label: "Searching 476 programs", pct: 32 });
 
   // 4. Hybrid retrieval: similarity, then LLM scoring. No pre-screen eligibility
@@ -169,11 +170,23 @@ export async function buildOpportunityMap(
 
   if (scored.length === 0) {
     step({ key: "weak", label: "Writing your finding…", pct: 80 });
-    return weakField(profile, followUps, meter, d.explainWeakField);
+    return weakField(profile, followUps, meter, d.explainWeakField, signal);
   }
 
   step({ key: "score", label: "Scoring and explaining your matches", pct: 52 });
-  const assessments = await d.explainMatches(profile, scored.map((s) => s.o), meter);
+  const assessments = await d.explainMatches(
+    profile,
+    scored.map((s) => s.o),
+    meter,
+    // Per-batch progress: interpolate between the score milestone (52) and the
+    // assemble milestone (90) as batches settle, so the ~83s scoring stage no
+    // longer sits frozen at 52%.
+    (done, total) => {
+      const pct = total > 0 ? 52 + Math.round((done / total) * 36) : 52;
+      step({ key: "score-progress", label: `Scored ${done} of ${total} programs`, pct, detail: `${done}/${total}` });
+    },
+    signal,
+  );
   step({ key: "assemble", label: "Writing your opportunity map", pct: 90 });
   const byId = new Map(scored.map((s) => [s.o.id, s.o]));
 
@@ -221,9 +234,18 @@ export async function buildOpportunityMap(
   const strong = matches.filter((m) => m.score >= CALIBRATION.scoreFloor);
 
   // 5. The honest no. Weak field is a finding, not an empty state.
-  const weak = strong.length < CALIBRATION.weakFieldThreshold
-    ? await d.explainWeakField(profile, meter)
-    : undefined;
+  // DEFENSIVE: this is an auxiliary narrative call — if it throws (429, timeout,
+  // malformed JSON), degrade to omitting the finding rather than discarding the
+  // entire computed `matches`/eligibility set. Mirrors the per-match screen()
+  // wrapping above.
+  let weak: Awaited<ReturnType<typeof d.explainWeakField>> | undefined;
+  if (strong.length < CALIBRATION.weakFieldThreshold) {
+    try {
+      weak = await d.explainWeakField(profile, meter, signal);
+    } catch {
+      weak = undefined;
+    }
+  }
 
   const now = Date.now();
   const in90 = matches.filter((m) => {
@@ -259,13 +281,14 @@ async function weakField(
   followUps: string[],
   meter: CostMeter,
   explainWeak: typeof explainWeakField = explainWeakField,
+  signal?: AbortSignal,
 ): Promise<OpportunityMap> {
   const result: OpportunityMap = {
     profile,
     followUps,
     summary: { highPotential: 0, fundingIdentified: 0, agencies: 0, closingIn90Days: 0 },
     matches: [],
-    weakFieldFinding: await explainWeak(profile, meter),
+    weakFieldFinding: await explainWeak(profile, meter, signal),
     agencyIntelligence: [],
   };
   finalizeCost(meter, result);

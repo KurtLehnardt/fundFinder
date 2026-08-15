@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { buildOpportunityMap, type StepEvent } from "@/lib/match";
+import { rateLimit, clientKey } from "@/lib/security/rateLimit";
 import precomputed from "@/data/precomputed.json";
+
+/**
+ * Server-side input bounds for the unauthenticated, real-money match endpoint
+ * (security review MEDIUM — denial-of-wallet). A max description length caps
+ * per-request embedding + scoring token spend; a best-effort per-IP rate limit
+ * blunts naive bursts. All env-overridable; defaults chosen to never impede a
+ * real founder or the judged demo.
+ */
+const MAX_DESCRIPTION_LENGTH = Number(process.env.MAX_DESCRIPTION_LENGTH) || 8_000;
+const MATCH_RATE_LIMIT = Number(process.env.MATCH_RATE_LIMIT) || 20;
+const MATCH_RATE_WINDOW_MS = Number(process.env.MATCH_RATE_WINDOW_MS) || 60_000;
 
 /**
  * The request→Response core of POST /api/match, extracted from route.ts so it
@@ -28,6 +40,15 @@ export async function handleMatchRequest(
   req: Request,
   deps: MatchDeps = REAL_DEPS,
 ): Promise<Response> {
+  // Best-effort per-IP throttle before any parsing/model work.
+  const limit = rateLimit(clientKey(req), { limit: MATCH_RATE_LIMIT, windowMs: MATCH_RATE_WINDOW_MS });
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "You're searching a lot in a short window — please wait a moment and try again." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
+    );
+  }
+
   // Validation errors return plain JSON (the client checks res.ok before
   // reading the stream). Everything else streams NDJSON progress + result.
   let description: string;
@@ -42,6 +63,23 @@ export async function handleMatchRequest(
       { error: "Add a bit more detail about your company — a sentence or two on what you build, your size, and what you need." },
       { status: 400 }
     );
+  }
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    return NextResponse.json(
+      { error: `That description is too long (max ${MAX_DESCRIPTION_LENGTH.toLocaleString()} characters). Trim it to the essentials and try again.` },
+      { status: 400 }
+    );
+  }
+
+  // One AbortController per request. Fed by BOTH the incoming request's own
+  // signal (fires when the client disconnects) and the stream's cancel() (fires
+  // when the consumer tears down). Threaded into buildOpportunityMap so an
+  // abandoned search stops generating tokens instead of billing the full run.
+  const ac = new AbortController();
+  const reqSignal = (req as Request & { signal?: AbortSignal }).signal;
+  if (reqSignal) {
+    if (reqSignal.aborted) ac.abort();
+    else reqSignal.addEventListener("abort", () => ac.abort(), { once: true });
   }
 
   const encoder = new TextEncoder();
@@ -60,19 +98,31 @@ export async function handleMatchRequest(
           return;
         }
 
-        const map = await deps.buildOpportunityMap(description, (e: StepEvent) =>
-          send({ type: "progress", ...e })
+        const map = await deps.buildOpportunityMap(
+          description,
+          (e: StepEvent) => send({ type: "progress", ...e }),
+          undefined,
+          ac.signal,
         );
         send({ type: "result", map });
         controller.close();
       } catch (err: any) {
+        // Abort (client gone) is expected — don't log it as a failure.
+        if (ac.signal.aborted || err?.name === "AbortError") {
+          try { controller.close(); } catch { /* already closed */ }
+          return;
+        }
+        // Log the full error server-side; send a GENERIC message to the client
+        // (never raw err.message / env-var names — security review LOW).
         console.error("match failed:", err);
-        send({
-          type: "error",
-          error: err?.message ?? "Matching failed. Check that OPENAI_API_KEY and ANTHROPIC_API_KEY are set.",
-        });
+        send({ type: "error", error: "The search didn't complete. Please try again." });
         controller.close();
       }
+    },
+    // Consumer canceled (navigated away / closed the tab) — abort in-flight
+    // model calls so the abandoned search stops spending.
+    cancel() {
+      ac.abort();
     },
   });
 

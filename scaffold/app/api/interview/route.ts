@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateQuestions, type InterviewQuestion } from "@/lib/interview/generateQuestions";
+import { rateLimit, clientKey } from "@/lib/security/rateLimit";
+
+/**
+ * Input bounds for the unauthenticated interview endpoint (security review
+ * MEDIUM — denial-of-wallet). Env-overridable; generous enough never to impede
+ * a real founder. The interview call is cheap/fast, so limits are looser than
+ * /api/match.
+ */
+const MAX_DESCRIPTION_LENGTH = Number(process.env.MAX_DESCRIPTION_LENGTH) || 8_000;
+const INTERVIEW_RATE_LIMIT = Number(process.env.INTERVIEW_RATE_LIMIT) || 40;
+const INTERVIEW_RATE_WINDOW_MS = Number(process.env.INTERVIEW_RATE_WINDOW_MS) || 60_000;
 
 /**
  * FE-03 — R1 pre-search interview: question generation ROUTE.
@@ -21,6 +32,17 @@ function badRequest(error: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(clientKey(req), { limit: INTERVIEW_RATE_LIMIT, windowMs: INTERVIEW_RATE_WINDOW_MS });
+  if (!limit.ok) {
+    // Still a 200-shaped contract for the client's happy path would be wrong
+    // here (this is a hard throttle, not a generation failure) — but keep it a
+    // 4xx, never a 5xx.
+    return NextResponse.json(
+      { error: "Too many requests — please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
+    );
+  }
+
   let description: string;
   try {
     const body = await req.json();
@@ -33,6 +55,9 @@ export async function POST(req: NextRequest) {
     return badRequest(
       "Add a bit more detail about your company — a sentence or two on what you build, your size, and what you need."
     );
+  }
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    return badRequest(`That description is too long (max ${MAX_DESCRIPTION_LENGTH.toLocaleString()} characters).`);
   }
 
   let questions: InterviewQuestion[] = [];

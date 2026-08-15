@@ -16,9 +16,16 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
 
-  // Only ever redirect to a same-origin relative path; default home.
+  // Only ever redirect to a same-origin relative path; default home. Require a
+  // single leading slash and EXPLICITLY reject protocol-relative (`//evil.com`)
+  // and backslash (`/\evil.com`) targets, which browsers can treat as an
+  // off-origin host — so a future refactor that stops origin-prepending can't
+  // reintroduce an open redirect (security review LOW).
   const nextParam = searchParams.get('next') ?? '/';
-  const next = nextParam.startsWith('/') ? nextParam : '/';
+  const next =
+    nextParam.startsWith('/') && !nextParam.startsWith('//') && !nextParam.startsWith('/\\')
+      ? nextParam
+      : '/';
 
   if (code) {
     const supabase = createSupabaseServerClient();
