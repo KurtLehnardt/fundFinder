@@ -20,20 +20,55 @@ const CASES = [
 // Grafana holds :3000 on the build machine, so `next dev` binds :3001. Override
 // with PORT if your dev server is elsewhere: PORT=3000 node scripts/4-precompute.mjs
 const PORT = process.env.PORT || "3001";
+
+/**
+ * H9 — /api/match streams newline-delimited JSON
+ * ({type:"progress"|"result"|"error"}), NOT a single JSON body. The old
+ * `res.json()` parsed the whole NDJSON blob as one object and ALWAYS threw, so
+ * this script could never regenerate the demo cases. Read the stream and keep
+ * the terminal `result` line's map (and surface a streamed `error`).
+ */
+async function readResultFromNdjson(res) {
+  const body = await res.text(); // buffers the whole stream — fine for a script
+  let map = null;
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let msg;
+    try { msg = JSON.parse(trimmed); } catch { continue; }
+    if (msg.type === "result") map = msg.map;
+    else if (msg.type === "error") throw new Error(msg.error ?? "match failed");
+  }
+  return map;
+}
+
 const out = [];
 for (const [id, text] of CASES) {
   process.stdout.write(`${id.padEnd(16)} `);
-  const res = await fetch(`http://localhost:${PORT}/api/match`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ description: text }),
-  });
-  if (!res.ok) { console.log(`FAILED ${res.status}`); continue; }
-  const map = await res.json();
-  out.push({ key: text.trim().slice(0, 120), id, map });
-  const strong = map.summary.highPotential;
-  const weak = map.weakFieldFinding ? " + weak-field finding" : "";
-  console.log(`${strong} strong matches${weak}`);
+  try {
+    const res = await fetch(`http://localhost:${PORT}/api/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: text }),
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.json())?.error ?? ""; } catch { /* non-JSON body */ }
+      console.log(`FAILED ${res.status} ${detail}`.trim());
+      continue;
+    }
+    const map = await readResultFromNdjson(res);
+    if (!map) { console.log("FAILED (stream ended without a result)"); continue; }
+
+    out.push({ key: text.trim().slice(0, 120), id, map });
+    const strong = map.summary.highPotential;
+    const weak = map.weakFieldFinding ? " + weak-field finding" : "";
+    // ELG-04 visibility: confirm the regenerated matches carry `eligibility`.
+    const withElig = (map.matches ?? []).filter((m) => m.eligibility).length;
+    console.log(`${strong} strong matches${weak} · ${withElig}/${(map.matches ?? []).length} with eligibility`);
+  } catch (err) {
+    console.log(`FAILED ${err.message}`);
+  }
 }
 
 await writeFile("data/precomputed.json", JSON.stringify(out, null, 2));
