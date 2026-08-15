@@ -20,7 +20,9 @@
  *
  * Non-blocking and honest: the spotlight uses pointer-events:none so the page
  * stays fully interactive, Esc / Skip / the X all dismiss it, and it fires at
- * most once per browser session (sessionStorage), so it never nags.
+ * most ONCE EVER per browser (localStorage, not sessionStorage — see
+ * lib/ui/welcomeTourPrefs.ts), so it never nags and never comes back after
+ * sign-in.
  *
  * Themed entirely with the design-token classes so it adapts to light/dark.
  * Mounted only on the flag-ON home path (app/page.tsx).
@@ -36,24 +38,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/components/AuthProvider";
-
-const SESSION_DISMISS_KEY = "ff.ui.welcomeTour.dismissed";
-
-/** sessionStorage guarded for SSR / privacy modes. Never throws. */
-function sessionDismissed(): boolean {
-  try {
-    return window.sessionStorage.getItem(SESSION_DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-function markSessionDismissed(): void {
-  try {
-    window.sessionStorage.setItem(SESSION_DISMISS_KEY, "1");
-  } catch {
-    /* storage disabled — worst case the guide shows once more; harmless. */
-  }
-}
+import {
+  hasSeenWelcomeTour,
+  markWelcomeTourSeen,
+  shouldStartWelcomeTour,
+} from "@/lib/ui/welcomeTourPrefs";
 
 type Placement = "top" | "bottom" | "left" | "right";
 type Step = {
@@ -81,12 +70,18 @@ export default function WelcomeTour() {
   const popRef = useRef<HTMLDivElement | null>(null);
   const nextBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  // Build the step list once auth resolves, then start (first visit this session).
+  // Build the step list once auth resolves, then start — first visit this
+  // browser, ever. Guarded by startedRef (this mount) AND the localStorage
+  // "seen" flag (this browser, forever), so a remount after the OAuth
+  // sign-in redirect can't re-trigger it: see shouldStartWelcomeTour().
   useEffect(() => {
-    if (loading) return; // wait for auth so we know whether to include the sign-in step
-    if (startedRef.current) return;
-    if (sessionDismissed()) return;
+    if (!shouldStartWelcomeTour({ loading, started: startedRef.current, seen: hasSeenWelcomeTour() })) {
+      return;
+    }
     startedRef.current = true;
+    // Mark seen NOW, not only on dismiss — so a reload or a sign-in redirect
+    // mid-tour can't re-trigger it (see lib/ui/welcomeTourPrefs.ts).
+    markWelcomeTourSeen();
 
     const list: Step[] = [];
     if (!user) {
@@ -121,7 +116,9 @@ export default function WelcomeTour() {
   const step = active ? steps![index] : null;
 
   const end = useCallback(() => {
-    markSessionDismissed();
+    // Already marked seen at start; re-marking here is a harmless, idempotent
+    // safety net in case that first write hit a transient storage failure.
+    markWelcomeTourSeen();
     setDone(true);
     setRect(null);
     setPos(null);
@@ -131,7 +128,7 @@ export default function WelcomeTour() {
     setIndex((i) => {
       const total = steps?.length ?? 0;
       if (i + 1 >= total) {
-        markSessionDismissed();
+        markWelcomeTourSeen();
         setDone(true);
         return i;
       }
