@@ -18,6 +18,7 @@ import type {
   OpportunityMap as OpportunityMapContract,
 } from "./contracts";
 import type { EligibilityDeterminationWithFreshness } from "./eligibility/freshness";
+import type { SearchCostDebug } from "./metering/meter";
 
 // Re-export the formalized v1 types (and the richer §3 Opportunity superset)
 // from the contracts barrel. Same names the v1 code already imports.
@@ -44,8 +45,22 @@ export type Match = MatchContract & {
   eligibility?: EligibilityDeterminationWithFreshness;
 };
 
+/**
+ * R4b — app-facing `OpportunityMap` additionally carries an OPTIONAL
+ * `costDebug`: the per-search token-cost/latency breakdown `buildOpportunityMap`
+ * (`lib/match.ts`) attaches only when the `r4b_cost_debug` flag is on (cost
+ * figures must never reach the end-user UI without it — see lib/flags/registry.ts).
+ *
+ * Same TS-only, cache-safe augmentation pattern as ELG-04's `Match.eligibility`
+ * above: the zod `OpportunityMapSchema` in `lib/contracts` stays the frozen v1
+ * shape (so `data/precomputed.json` keeps validating, and the field is simply
+ * absent on cached/precomputed maps), while every unit that reads
+ * `OpportunityMap` already imports it from `@/lib/types`, so they all see the
+ * optional field without a contract change.
+ */
 export type OpportunityMap = Omit<OpportunityMapContract, "matches"> & {
   matches: Match[];
+  costDebug?: SearchCostDebug;
 };
 
 export const TIER_LABEL: Record<Tier, string> = {
