@@ -61,8 +61,8 @@ export default function AutoApplyModal({
   };
 
   const panelClass = design
-    ? "relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-structure-on-canvas bg-canvas p-6 text-foreground"
-    : "relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-rule bg-white p-6 text-ink";
+    ? "relative max-h-[calc(100dvh-4rem)] w-full max-w-lg overflow-y-auto border border-structure-on-canvas bg-canvas p-6 text-foreground"
+    : "relative max-h-[calc(100dvh-4rem)] w-full max-w-lg overflow-y-auto border border-rule bg-white p-6 text-ink";
 
   const eyebrowClass = design
     ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
@@ -103,7 +103,7 @@ export default function AutoApplyModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8 sm:items-center"
       onClick={onClose}
     >
       <div
