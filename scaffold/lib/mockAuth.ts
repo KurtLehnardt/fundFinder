@@ -10,11 +10,14 @@
  * so porting to vanilla JS or another framework means keeping this file as-is.
  */
 
+import type { Provenanced } from '@/lib/contracts/primitives';
+
 export const STORAGE_KEYS = {
   authed: 'ff.auth.isAuthenticated',
   user: 'ff.auth.user',
   consent: 'ff.consent.v1',
   runs: 'ff.runs.v1',
+  autoApply: 'ff.autoapply.v1',
 } as const;
 
 export type MockUser = {
@@ -130,6 +133,74 @@ export function setConsent(granted: boolean): ConsentRecord {
   };
   safeStorage()?.setItem(STORAGE_KEYS.consent, JSON.stringify(record));
   return record;
+}
+
+/* ---- Auto-apply requirements (FE-06) ----
+ * "Auto Apply" is a locked, stubbed affordance on each opportunity card: it
+ * opens a Pro-upsell modal listing what the founder needs on file before a
+ * real auto-apply flow (blocked on grant-site API keys) could act on their
+ * behalf. This form — reached via the hamburger menu's Settings panel — lets
+ * them record those facts locally so the modal can show what's already done.
+ * Gates nothing: there is no server side to gate.
+ */
+
+export type AutoApplyRequirements = {
+  samRegistered: boolean;
+  /** Optional; only meaningful when samRegistered is true. Free-form date text, '' if unset. */
+  samRegisteredDate: string;
+  uei: string;
+  aorName: string;
+  /** "Confirm on file" checkbox — satisfies the requirement even with no name typed. */
+  aorOnFile: boolean;
+  /** "Confirm on file" checkbox for E-Biz POC delegation. */
+  eBizPocOnFile: boolean;
+};
+
+export const EMPTY_AUTO_APPLY_REQUIREMENTS: AutoApplyRequirements = {
+  samRegistered: false,
+  samRegisteredDate: '',
+  uei: '',
+  aorName: '',
+  aorOnFile: false,
+  eBizPocOnFile: false,
+};
+
+export function getAutoApplyRequirements(): AutoApplyRequirements {
+  const raw = safeStorage()?.getItem(STORAGE_KEYS.autoApply);
+  if (!raw) return EMPTY_AUTO_APPLY_REQUIREMENTS;
+  try {
+    const parsed = JSON.parse(raw);
+    // Merge over the defaults so an older/partial saved record never yields undefined fields.
+    return { ...EMPTY_AUTO_APPLY_REQUIREMENTS, ...parsed };
+  } catch {
+    return EMPTY_AUTO_APPLY_REQUIREMENTS;
+  }
+}
+
+export function setAutoApplyRequirements(reqs: AutoApplyRequirements): AutoApplyRequirements {
+  safeStorage()?.setItem(STORAGE_KEYS.autoApply, JSON.stringify(reqs));
+  return reqs;
+}
+
+/**
+ * §3.1 CompanyProfile carries the same two registration facts (sam_registered,
+ * uei) that R8.1 eligibility screening reads. Pure, unwired mapper from the
+ * local Auto Apply form to that shape, provided so ELG/Interview can adopt it
+ * later without re-deriving the mapping — nothing in the app calls this today.
+ * Provenance is always `user_stated` (the founder's own self-report);
+ * confidence 1 because a self-report carries no model uncertainty.
+ */
+export function mapAutoApplyToCompanyProfileFields(
+  reqs: AutoApplyRequirements
+): { sam_registered?: Provenanced<boolean>; uei?: Provenanced<string> } {
+  const out: { sam_registered?: Provenanced<boolean>; uei?: Provenanced<string> } = {};
+  if (reqs.samRegistered) {
+    out.sam_registered = { value: true, provenance: 'user_stated', confidence: 1 };
+  }
+  if (reqs.uei.trim().length > 0) {
+    out.uei = { value: reqs.uei.trim(), provenance: 'user_stated', confidence: 1 };
+  }
+  return out;
 }
 
 /** Wipe everything this app stored. Wire this to a visible "Delete my data" control. */

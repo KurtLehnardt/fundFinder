@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter, IBM_Plex_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { SettingsPanelProvider } from "@/components/AppMenu";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", weight: ["500", "700"] });
@@ -25,8 +26,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `r9_0_mockauth` flag (see app/page.tsx, components/IntakeForm.tsx).
           Keeping the provider itself unconditional also means the real OAuth
           swap at R9 only has to change what's inside this file, not add it.
+
+          SettingsPanelProvider (FE-06) is the same kind of always-on, no-UI-
+          of-its-own context: it just makes the device-local Settings panel
+          (Auto Apply requirements) reachable from anywhere in the tree —
+          the hamburger menu (AppMenu) and the Auto Apply modal deep inside
+          each OpportunityCard both open the same panel through it, without
+          prop-drilling through OpportunityMap.
         */}
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <SettingsPanelProvider>{children}</SettingsPanelProvider>
+        </AuthProvider>
       </body>
     </html>
   );

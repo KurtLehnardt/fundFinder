@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
+import AutoApplyModal from "@/components/AutoApplyModal";
+import { useSettingsPanel } from "@/components/AppMenu";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`;
@@ -75,6 +77,9 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const [open, setOpen] = useState(index < 3);
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
+  // FE-06: locked "Auto Apply" stub — opens the Pro-upsell modal, never submits anything.
+  const [autoApplyOpen, setAutoApplyOpen] = useState(false);
+  const { openSettings } = useSettingsPanel();
 
   const spine = TIER_COLOR[m.tier] ?? TIER_COLOR.none;
   const color = TIER_TEXT[m.tier] ?? TIER_TEXT.none;
@@ -133,6 +138,21 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const linkClass = design
     ? "mt-3 inline-block font-mono text-[12px] text-structure-on-canvas underline underline-offset-4"
     : "mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4";
+
+  // FE-06: the locked Auto Apply control is a secondary/structure affordance —
+  // never bg-action (reserved for the primary CTA). Sits in its own row, own
+  // <button>, outside the header's full-width toggle button (see below).
+  const autoApplyRowClass = design
+    ? "flex items-center gap-2 border-t border-structure-on-canvas px-6 py-3"
+    : "flex items-center gap-2 border-t border-rule px-6 py-3";
+
+  const autoApplyBtnClass = design
+    ? "inline-flex items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
+    : "inline-flex items-center gap-1.5 rounded-sm border border-rule bg-white px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal";
+
+  const autoApplyHintClass = design
+    ? "font-mono text-[10px] text-foreground"
+    : "font-mono text-[10px] text-slate-550";
 
   return (
     <article className={articleClass}>
@@ -194,6 +214,36 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           </div>
         </dl>
       </button>
+
+      {/*
+        FE-06: rendered as its own row, its own <button>, OUTSIDE the header
+        toggle button above (which is already a full-width <button> — nesting
+        a second interactive button inside it would be invalid HTML). Visible
+        on every card regardless of expand state. Locked stub only: clicking
+        it never submits anything, it just opens the Pro-upsell modal.
+      */}
+      <div className={autoApplyRowClass}>
+        <button
+          type="button"
+          onClick={() => setAutoApplyOpen(true)}
+          aria-haspopup="dialog"
+          className={autoApplyBtnClass}
+        >
+          <LockIcon className="h-3 w-3" />
+          Auto Apply
+        </button>
+        <span className={autoApplyHintClass}>Pro feature &middot; not available yet</span>
+      </div>
+
+      {autoApplyOpen && (
+        <AutoApplyModal
+          onClose={() => setAutoApplyOpen(false)}
+          onOpenSettings={() => {
+            setAutoApplyOpen(false);
+            openSettings();
+          }}
+        />
+      )}
 
       {open && (
         <div className={detailsClass}>
@@ -280,6 +330,25 @@ function Section({ title, body, accent, design }: { title: string; body?: string
       <p className={eyebrowClass(design, "mb-1.5")}>{title}</p>
       <p className={bodyClass}>{body}</p>
     </div>
+  );
+}
+
+/** FE-06: closed-padlock glyph for the locked Auto Apply control. No external asset. */
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="3" y="7" width="10" height="7" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+    </svg>
   );
 }
 
