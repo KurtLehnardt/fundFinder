@@ -1,6 +1,7 @@
 "use client";
 import { Component, type ReactNode } from "react";
 import OpportunityCard from "./OpportunityCard";
+import EligibilityBuckets, { type EligibilityItem } from "./EligibilityBuckets";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 
@@ -76,6 +77,10 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
 
+  // R8 / ELG-04: gates the three-bucket eligibility DISPLAY. Off = today's
+  // results unchanged; the determinations still ride on each match, just unshown.
+  const r8 = isFlagEnabled("r8_eligibility");
+
   const matches: Match[] = Array.isArray(map.matches) ? map.matches : [];
   const followUps: string[] = Array.isArray(map.followUps) ? map.followUps : [];
   const agencyIntelligence = Array.isArray(map.agencyIntelligence) ? map.agencyIntelligence : [];
@@ -91,6 +96,21 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const highPotential = shown.filter((m) => m.tier === "likely" || m.tier === "verify").length;
   const closingSoon = shown.filter((m) => withinNinetyDays(m.opportunity?.deadline)).length;
   const funding = fundingCell(shown);
+
+  // R8 / ELG-04: map the REAL determinations attached by buildOpportunityMap
+  // (screen() + freshness) into the FE-04 three-bucket display's item shape.
+  // Only the shown opportunities are screened here — the same set the founder
+  // sees as cards. Empty when the flag is off, or on cached maps that predate
+  // the field (their matches simply carry no `eligibility`).
+  const eligibilityItems: EligibilityItem[] = r8
+    ? shown
+        .filter((m) => m.eligibility)
+        .map((m) => ({
+          determination: m.eligibility!.determination,
+          title: m.opportunity?.title ?? m.opportunity?.program,
+          agency: m.opportunity?.agency,
+        }))
+    : [];
 
   const statGridClass = design
     ? "grid grid-cols-2 gap-px border border-structure-on-canvas bg-structure-on-canvas sm:grid-cols-4"
@@ -197,6 +217,15 @@ export default function OpportunityMap({ map }: { map: MapT }) {
                 <OpportunityCard key={m.opportunity?.id ?? i} m={m} index={i} />
               ))}
             </div>
+          </section>
+        )}
+
+        {/* R8 / ELG-04: real three-bucket eligibility screening for the shown
+            opportunities, gated behind r8_eligibility (default off). */}
+        {r8 && eligibilityItems.length > 0 && (
+          <section className={agenciesSectionClass}>
+            <p className={eyebrowClass(design, "mb-4")}>Eligibility screening</p>
+            <EligibilityBuckets items={eligibilityItems} />
           </section>
         )}
 

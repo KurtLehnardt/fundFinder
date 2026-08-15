@@ -13,6 +13,11 @@
  */
 
 import type { Tier } from "./contracts";
+import type {
+  Match as MatchContract,
+  OpportunityMap as OpportunityMapContract,
+} from "./contracts";
+import type { EligibilityDeterminationWithFreshness } from "./eligibility/freshness";
 
 // Re-export the formalized v1 types (and the richer §3 Opportunity superset)
 // from the contracts barrel. Same names the v1 code already imports.
@@ -22,9 +27,26 @@ export type {
   Opportunity,
   AwardHistory,
   CriterionCheck,
-  Match,
-  OpportunityMap,
 } from "./contracts";
+
+/**
+ * ELG-04 — app-facing `Match` is the frozen CON-01 contract `Match` plus an
+ * OPTIONAL, additive `eligibility` field: the ELG-01 determination wrapped with
+ * its ELG-02 freshness annotation, attached by `buildOpportunityMap`.
+ *
+ * The zod `MatchSchema` in `lib/contracts` stays the frozen v1 shape (so
+ * `data/precomputed.json` keeps validating), and this augmentation is TS-only
+ * and cache-safe: cached maps simply lack the field, and every unit that reads
+ * `Match`/`OpportunityMap` already imports them from `@/lib/types`, so they all
+ * see the optional field.
+ */
+export type Match = MatchContract & {
+  eligibility?: EligibilityDeterminationWithFreshness;
+};
+
+export type OpportunityMap = Omit<OpportunityMapContract, "matches"> & {
+  matches: Match[];
+};
 
 export const TIER_LABEL: Record<Tier, string> = {
   likely: "Likely Fit",
