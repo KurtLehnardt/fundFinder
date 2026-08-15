@@ -51,9 +51,9 @@ const TIER_TEXT: Record<string, string> = {
  * (OpportunityMap filters tier "none" out before cards are built).
  */
 const TIER_BADGE: Record<string, string> = {
-  likely: "bg-success text-foreground",
-  verify: "bg-warning text-foreground",
-  adjacent: "bg-info text-foreground",
+  likely: "bg-success text-on-semantic",
+  verify: "bg-warning text-on-semantic",
+  adjacent: "bg-info text-on-semantic",
   none: "bg-canvas-alt text-foreground",
 };
 
@@ -140,7 +140,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const dtClass = design ? "inline text-foreground" : "inline text-slate-550";
 
   const forecastedClass = design
-    ? "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-foreground"
+    ? "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-on-semantic"
     : "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550";
 
   const detailsClass = design

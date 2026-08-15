@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TEST_CASES } from "@/lib/testCases";
 import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
+import { useAnalytics } from "@/components/AnalyticsProvider";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import { BRAND } from "@/lib/brand";
@@ -30,6 +31,10 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // H1: the exact description the last search actually ran on, so the error
+  // state can offer a real "Try again" that re-runs it (independent of later
+  // edits to `text`, and correct for the sample-pick / interview-enriched paths).
+  const [lastSearched, setLastSearched] = useState("");
   // Real pipeline milestone streamed from /api/match (drives SearchProgress).
   const [progress, setProgress] = useState<{ pct: number; label: string } | null>(null);
   // FE-02 (R7.1): sample-company picker is collapsed by default; it's a
@@ -76,6 +81,35 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const { consent, setConsent, signOut } = useAuth();
   const [justCleared, setJustCleared] = useState(false);
 
+  // H5 (R10.1) — funnel analytics. All emits no-op unless r10_analytics is on
+  // (gating lives in track()); nothing here changes flag-off behavior.
+  const analytics = useAnalytics();
+  // run_abandoned ("the single most important event", R10.1): the epoch ms a
+  // /api/match search started, or null when none is in flight. A ref (not
+  // state) so the pagehide/unmount listener reads the live value without a
+  // stale closure and without re-subscribing on every render.
+  const searchStartRef = useRef<number | null>(null);
+  const analyticsRef = useRef(analytics);
+  analyticsRef.current = analytics;
+
+  useEffect(() => {
+    // If a search is still in flight when the user navigates away / closes the
+    // tab (pagehide, incl. bfcache) or this form unmounts, that's an abandoned
+    // run — emit it with elapsed time. Guarded to fire at most once per search.
+    const abandonIfPending = () => {
+      const start = searchStartRef.current;
+      if (start != null) {
+        searchStartRef.current = null;
+        analyticsRef.current.runAbandoned(Date.now() - start);
+      }
+    };
+    window.addEventListener("pagehide", abandonIfPending);
+    return () => {
+      window.removeEventListener("pagehide", abandonIfPending);
+      abandonIfPending();
+    };
+  }, []);
+
   function handleDeleteMyData() {
     clearAllLocalData();
     // clearAllLocalData only touches localStorage — resync the in-memory auth
@@ -91,6 +125,11 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     setLoading(true);
     setError(null);
     setProgress(null);
+    setLastSearched(description);
+    // H5: search start + mark a run in flight (for run_abandoned). No description
+    // content is sent — the event is a name + timestamp only.
+    searchStartRef.current = Date.now();
+    analytics.searchStarted();
     try {
       const res = await fetch("/api/match", {
         method: "POST",
@@ -98,11 +137,20 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         body: JSON.stringify({ description }),
       });
 
-      // Validation errors come back as plain JSON (non-streamed).
-      const ctype = res.headers.get("content-type") ?? "";
-      if (!res.ok && ctype.includes("application/json")) {
-        const j = await res.json();
-        throw new Error(j.error ?? "Something went wrong.");
+      // H1: ANY non-OK response is an error, regardless of content-type. A
+      // proxy/edge 502/504 (or a gateway timeout) returns HTML, not our JSON
+      // envelope — the old `!res.ok && ctype==json` guard let those fall through
+      // into the stream loop and dead-end with no error shown.
+      if (!res.ok) {
+        const ctype = res.headers.get("content-type") ?? "";
+        let message = "The search didn't complete — please try again.";
+        if (ctype.includes("application/json")) {
+          try {
+            const j = await res.json();
+            if (j?.error) message = j.error;
+          } catch { /* non-JSON body — keep the generic message */ }
+        }
+        throw new Error(message);
       }
       // Fallback for environments without a readable stream: parse as one JSON blob.
       if (!res.body) {
@@ -116,6 +164,11 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       const decoder = new TextDecoder();
       let buf = "";
       let streamDone = false;
+      // H1: track whether the terminal `result` line ever arrived. A 200 stream
+      // that closes after only `progress` lines (mid-stream server crash,
+      // gateway idle-timeout, or a platform kill at maxDuration) otherwise
+      // drains here with neither onResult nor setError — a silent dead-end.
+      let gotResult = false;
       while (!streamDone) {
         const { value, done } = await reader.read();
         streamDone = done;
@@ -130,17 +183,25 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
           if (msg.type === "progress") {
             setProgress({ pct: msg.pct ?? 0, label: msg.label ?? "" });
           } else if (msg.type === "result") {
+            gotResult = true;
             onResult(msg.map);
           } else if (msg.type === "error") {
             throw new Error(msg.error ?? "Matching failed.");
           }
         }
       }
+      // H1: the stream ended without a result and without an explicit error —
+      // treat it as a failure the user can retry, never a blank form.
+      if (!gotResult) {
+        throw new Error("The search didn't complete — please try again.");
+      }
     } catch (e: any) {
-      setError(e.message);
+      setError(e?.message ?? "The search didn't complete — please try again.");
     } finally {
       setLoading(false);
       setProgress(null);
+      // The run finished (result or error) — it can no longer be "abandoned".
+      searchStartRef.current = null;
     }
   }
 
@@ -183,6 +244,8 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       setInterviewQuestions(questions);
       setOriginalDescription(description);
       setInterviewPhase("questions");
+      // H5: the pre-search interview was shown (count only, no content).
+      analytics.interviewShown({ questions: questions.length });
     } catch {
       // Network error / bad JSON — never block the free path.
       setInterviewPhase("idle");
@@ -426,9 +489,19 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       )}
 
       {error && (
-        <p className={errorClass}>
-          {error}
-        </p>
+        <div className={errorClass}>
+          <p>{error}</p>
+          {/* H1: an explicit retry so an error/timeout is never a dead-end.
+              Re-runs the exact description the failed search used. */}
+          <button
+            type="button"
+            onClick={() => run(lastSearched || text)}
+            disabled={loading || (lastSearched || text).trim().length < 20}
+            className="mt-2 font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline decoration-dotted underline-offset-2 transition hover:text-structure-on-canvas disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+          >
+            Try again
+          </button>
+        </div>
       )}
     </div>
   );

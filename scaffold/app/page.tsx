@@ -1,5 +1,5 @@
 "use client";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
 import type { OpportunityMap as MapT } from "@/lib/types";
@@ -7,6 +7,7 @@ import AppMenu from "@/components/AppMenu";
 import { isFlagEnabled } from "@/lib/flags";
 import { SidebarProvider, useSidebar } from "@/components/SidebarProvider";
 import SignInNudge from "@/components/SignInNudge";
+import { useAnalytics } from "@/components/AnalyticsProvider";
 
 // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
 // look on this A/B branch (previously gated behind r7_design). The token
@@ -31,6 +32,7 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   // Outside the provider (flag OFF) this is an inert no-op fallback, so calling
   // it unconditionally is safe and the flag-OFF render stays byte-identical.
   const { expanded, width, resizing } = useSidebar();
+  const analytics = useAnalytics();
 
   // Desktop content shift: pad left by the sidebar width when expanded. The
   // padding only applies >= md (globals.css); during a resize drag we drop the
@@ -45,6 +47,29 @@ function HomeShell({ sidebarOn }: { sidebarOn: boolean }) {
   ]
     .filter(Boolean)
     .join(" ");
+
+  // H5 (R10.1) — funnel emit at the real "result shown" call site: when a map
+  // renders. A normal result fires `first_result_rendered`; the honest-no
+  // finding (weak field) fires `run_completed` with `honest_no`. Both are
+  // counts/flags only (no description content), and no-op unless r10_analytics
+  // is on. Keyed on the map object (a fresh one per search) so it fires once.
+  useEffect(() => {
+    if (!map) return;
+    const resultsShown = map.matches.length;
+    if (resultsShown > 0) {
+      analytics.firstResultRendered({
+        results_shown: resultsShown,
+        high_potential: map.summary.highPotential,
+      });
+    }
+    if (map.weakFieldFinding) {
+      analytics.runCompleted({ honest_no: true, high_potential: map.summary.highPotential });
+    } else if (resultsShown === 0) {
+      analytics.runCompleted({ results_shown: 0 });
+    }
+    // analytics identity is stable (useMemo in the provider); map drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
 
   return (
     <main className={mainClass} style={shiftStyle}>

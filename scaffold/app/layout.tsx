@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { SettingsPanelProvider } from "@/components/AppMenu";
 import { BillingProvider } from "@/components/BillingProvider";
 import { SearchDraftProvider } from "@/components/SearchDraftProvider";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
@@ -47,10 +48,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           unconditionally does not change flag-off behavior — nothing reads them
           in a way that alters today's UI unless the left_sidebar flag is on.
         */}
+        {/*
+          H5 — AnalyticsProvider (PLT-03 / R10.1). Same always-on, passive,
+          no-UI/no-network context posture as the providers above: it only hands
+          feature code the typed funnel-event builders. Every emit still no-ops
+          unless the `r10_analytics` flag is on (gating lives in track()), so
+          mounting it unconditionally does not change flag-off behavior.
+        */}
         <AuthProvider>
           <BillingProvider>
             <SearchDraftProvider>
-              <SettingsPanelProvider>{children}</SettingsPanelProvider>
+              <SettingsPanelProvider>
+                <AnalyticsProvider>{children}</AnalyticsProvider>
+              </SettingsPanelProvider>
             </SearchDraftProvider>
           </BillingProvider>
         </AuthProvider>

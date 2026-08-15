@@ -148,9 +148,9 @@ function BucketBadge({ design, bucket }: { design: boolean; bucket: EligibilityB
   const label = BUCKET_META[bucket].badgeLabel;
   if (design) {
     const chip: Record<EligibilityBucket, string> = {
-      eligible: "bg-success text-foreground",
-      conditionally_eligible: "bg-info text-foreground",
-      unknown: "bg-warning text-foreground",
+      eligible: "bg-success text-on-semantic",
+      conditionally_eligible: "bg-info text-on-semantic",
+      unknown: "bg-warning text-on-semantic",
       excluded: "bg-error text-token-white",
     };
     return (
@@ -263,7 +263,7 @@ function RequiredStepLine({ step, design }: { step: RequiredStep; design: boolea
       : null;
 
   const chipClass = design
-    ? "inline-block shrink-0 rounded-sm bg-info px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow tabular-nums text-foreground"
+    ? "inline-block shrink-0 rounded-sm bg-info px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow tabular-nums text-on-semantic"
     : "inline-block shrink-0 rounded-sm border border-rule px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow text-slate-550";
 
   const stepTextClass = design
