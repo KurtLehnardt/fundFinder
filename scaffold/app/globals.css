@@ -2,12 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+/* The USWDS token palette is now the default look on this branch (the A/B
+ * "design" experiment). tokens.ts drives light + dark, so advertise both to
+ * the UA (native form controls, scrollbars) via color-scheme. */
+:root { color-scheme: light dark; }
 
+/* Base surface + text come straight from the design-token CSS variables below
+ * (canvas = 60% neutral, foreground = body text), so the whole app renders on
+ * the USWDS 60/30/10 palette by default instead of the old paper/ink look. */
 body {
-  background: theme('colors.paper');
-  color: theme('colors.ink');
+  background: var(--color-canvas);
+  color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /*
@@ -34,6 +41,27 @@ body {
   --color-success: #04c585;
   --color-warning: #ffbe2e;
   --color-error: #e52207;
+
+  /*
+   * Elevation shadows (polish pass). Layered transparent shadows give cards /
+   * panels / icon controls depth without a hard navy border — "shadows for
+   * elevation, borders for structure." These are neutral black alphas (not a
+   * hex color and not a token color), so they read correctly on any surface.
+   * Light mode: a 1px ring + two soft ambient layers. Not gated by check:hex
+   * (rgba, no hex literal) and this file is the token source of truth anyway.
+   */
+  --shadow-card:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 1px 2px -1px rgba(0, 0, 0, 0.06),
+    0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card-hover:
+    0 0 0 1px rgba(0, 0, 0, 0.09),
+    0 2px 6px -1px rgba(0, 0, 0, 0.09),
+    0 8px 20px 0 rgba(0, 0, 0, 0.08);
+  --shadow-overlay:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 10px 24px -6px rgba(0, 0, 0, 0.22),
+    0 24px 48px -12px rgba(0, 0, 0, 0.28);
 }
 
 /*
@@ -62,6 +90,14 @@ body {
     --color-success: #04c585;
     --color-warning: #ffbe2e;
     --color-error: #e52207;
+
+    /* Dark mode: layered black ambient shadows are invisible on a dark canvas,
+     * so depth comes from a subtle white ring instead (per the polish skill). */
+    --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.10);
+    --shadow-card-hover: 0 0 0 1px rgba(255, 255, 255, 0.16);
+    --shadow-overlay:
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 16px 40px -8px rgba(0, 0, 0, 0.6);
   }
 }
 
@@ -77,3 +113,16 @@ body {
 
 .reveal { animation: rise .4s cubic-bezier(.2,.7,.3,1) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+
+/*
+ * Split-and-stagger hero entrance (polish skill §5). One-shot, page-load only —
+ * an infrequent staged entrance where sequence communicates hierarchy. Each
+ * direct child rises with a ~90ms offset. The prefers-reduced-motion rule above
+ * disables it wholesale (elements fall back to their normal, fully-visible
+ * computed style — the from{opacity:0} only applies while the animation runs).
+ */
+.stagger > * { animation: rise .5s cubic-bezier(.2,.7,.3,1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 90ms; }
+.stagger > *:nth-child(3) { animation-delay: 180ms; }
+.stagger > *:nth-child(4) { animation-delay: 270ms; }

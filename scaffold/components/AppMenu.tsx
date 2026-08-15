@@ -59,7 +59,9 @@ export function SettingsPanelProvider({ children }: { children: ReactNode }) {
 // ---------------------------------------------------------------------------
 
 export default function AppMenu() {
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
+  // on this A/B branch (previously gated behind r7_design).
+  const design = true;
   // Show the sign-in surface when EITHER auth backend is live: the real
   // Supabase flag (R9) or the interim mock flag (R9.0). Checking only the mock
   // flag would hide sign-in when real auth is the one that's on.
@@ -89,20 +91,23 @@ export default function AppMenu() {
     };
   }, [menuOpen]);
 
+  // Polish: real hover fill + press feedback on the icon control (44px target).
   const hamburgerBtnClass = design
-    ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-structure-on-canvas p-2 text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-structure-on-canvas p-2 text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-rule bg-white p-2 text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
+  // Dropdown: elevated surface (rounded + overlay shadow) over a definition border.
   const menuClass = design
-    ? "absolute right-0 top-full z-40 mt-2 w-48 border border-structure-on-canvas bg-canvas py-1 text-foreground shadow-sm"
+    ? "absolute right-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-md border border-structure-on-canvas bg-canvas py-1 text-foreground shadow-overlay"
     : "absolute right-0 top-full z-40 mt-2 w-48 border border-rule bg-white py-1 shadow-sm";
 
+  // Menu items get a full 44px hit height.
   const menuItemClass = design
-    ? "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-foreground hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset"
+    ? "flex min-h-[44px] w-full items-center px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-foreground transition hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset"
     : "block w-full px-4 py-2 text-left font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset";
 
   const signInLinkClass = design
-    ? "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "inline-flex min-h-[44px] items-center rounded-sm border border-rule bg-white px-4 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (

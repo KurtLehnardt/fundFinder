@@ -131,8 +131,11 @@ export default function PreSearchInterview({
   // Interview structure is neutral (navy/structure); bg-action / bg-ink is
   // reserved for the single primary "Find opportunities" action below.
 
+  // Polish: elevation shadows replace the broken /30 and /20 alpha borders
+  // (Tailwind can't compute alpha on CSS-var-backed token colors). Concentric
+  // radii: card (rounded-lg) → fieldset (rounded-md) → inputs (rounded-sm).
   const cardClass = design
-    ? "mt-4 rounded-sm border border-structure-on-canvas/30 bg-canvas-alt px-4 py-4"
+    ? "mt-4 rounded-lg bg-canvas-alt px-4 py-4 shadow-card"
     : "mt-4 rounded-sm border border-rule bg-white px-4 py-4";
 
   const headingClass = design
@@ -140,19 +143,19 @@ export default function PreSearchInterview({
     : "eyebrow block mb-3";
 
   const introClass = design
-    ? "font-body text-[13px] leading-relaxed text-foreground"
+    ? "text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "font-body text-[13px] leading-relaxed text-slate-550";
 
   const fieldsetClass = design
-    ? "rounded-sm border border-structure-on-canvas/20 bg-canvas p-4"
+    ? "rounded-md bg-canvas p-4 shadow-card"
     : "rounded-sm border border-rule bg-paper p-4";
 
   const legendClass = design
-    ? "px-1 font-body text-[15px] leading-relaxed text-foreground"
+    ? "text-balance px-1 font-body text-[15px] leading-relaxed text-foreground"
     : "px-1 font-body text-[15px] leading-relaxed text-ink";
 
   const rationaleClass = design
-    ? "mt-1 font-body text-[12px] leading-relaxed text-structure-on-canvas"
+    ? "mt-1 text-pretty font-body text-[12px] leading-relaxed text-structure-on-canvas"
     : "mt-1 font-body text-[12px] leading-relaxed text-slate-550";
 
   const optionLabelClass = design
@@ -170,14 +173,14 @@ export default function PreSearchInterview({
     : "w-full rounded-sm border border-rule bg-white px-3 py-2 font-body text-[14px] text-ink outline-none focus:border-federal focus:ring-2 focus:ring-federal/15";
 
   const secondaryButtonClass = design
-    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "min-h-[44px] rounded-sm border border-rule bg-white px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   // The ONLY green/primary-fill surface in this component — mirrors
   // IntakeForm's primaryButtonClass exactly, reserved for the single final
   // search action.
   const primaryButtonClass = design
-    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white shadow-sm transition hover:opacity-90 hover:shadow active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "min-h-[44px] rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const reviewTextareaClass = design

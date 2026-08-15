@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef } from "react";
-import { isFlagEnabled } from "@/lib/flags";
 import { useDialogA11y } from "@/components/useDialogA11y";
 
 /**
@@ -14,7 +13,9 @@ import { useDialogA11y } from "@/components/useDialogA11y";
  */
 
 export default function CompetitorAnalysisModal({ onClose }: { onClose: () => void }) {
-  const design = isFlagEnabled("r7_design");
+  // Design revamp: USWDS 60/30/10 restyle is the DEFAULT on this A/B branch
+  // (previously gated behind r7_design).
+  const design = true;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);

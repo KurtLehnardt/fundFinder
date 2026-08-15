@@ -74,8 +74,10 @@ function fundingCell(shown: Match[]): { n: string; label: string } | null {
 export default function OpportunityMap({ map }: { map: MapT }) {
   if (!map || typeof map !== "object") return null;
 
-  // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the
+  // DEFAULT on this A/B branch (previously gated behind r7_design). v1 fallback
+  // branches are retained but unreachable.
+  const design = true;
 
   // R8 / ELG-04: gates the three-bucket eligibility DISPLAY. Off = today's
   // results unchanged; the determinations still ride on each match, just unshown.
@@ -112,18 +114,21 @@ export default function OpportunityMap({ map }: { map: MapT }) {
         }))
     : [];
 
+  // The stat band keeps its hairline grid (gap-px over a navy fill = structural
+  // cell separators), now clipped to a rounded, softly-elevated card.
   const statGridClass = design
-    ? "grid grid-cols-2 gap-px border border-structure-on-canvas bg-structure-on-canvas sm:grid-cols-4"
+    ? "grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-structure-on-canvas bg-structure-on-canvas shadow-card sm:grid-cols-4"
     : "grid grid-cols-2 gap-px border border-rule bg-rule sm:grid-cols-4";
 
   // "A finding, not a dead end" is the honest-no hero panel — navy structure
   // fill (white content on top), same pairing as the header/nav per R7.2.
+  // Polish: rounded + elevation instead of a same-color border.
   const weakFieldClass = design
-    ? "mt-8 border border-structure bg-structure px-7 py-7 text-token-white"
+    ? "mt-8 rounded-lg bg-structure px-7 py-7 text-token-white shadow-card"
     : "mt-8 border border-ink bg-ink px-7 py-7 text-paper";
 
   const weakFieldBodyClass = design
-    ? "mt-3 max-w-2xl font-body text-[15px] leading-relaxed text-token-white"
+    ? "mt-3 max-w-2xl text-pretty font-body text-[15px] leading-relaxed text-token-white"
     : "mt-3 max-w-2xl font-body text-[15px] leading-relaxed text-paper/85";
 
   // Full-opacity token.white throughout the panel rather than opacity
@@ -134,15 +139,15 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const redirectItemClass = design ? "border-l-2 border-token-white pl-4" : "border-l-2 border-paper/25 pl-4";
 
   const redirectWhyClass = design
-    ? "mt-1 font-body text-[13px] leading-relaxed text-token-white"
+    ? "mt-1 text-pretty font-body text-[13px] leading-relaxed text-token-white"
     : "mt-1 font-body text-[13px] leading-relaxed text-paper/70";
 
   const followUpsSectionClass = design
-    ? "mt-8 border border-structure-on-canvas bg-canvas-alt px-6 py-5"
+    ? "mt-8 rounded-lg bg-canvas-alt px-6 py-5 shadow-card"
     : "mt-8 border border-rule bg-white px-6 py-5";
 
   const followUpItemClass = design
-    ? "font-body text-[14px] text-foreground"
+    ? "text-pretty font-body text-[14px] text-foreground"
     : "font-body text-[14px] text-slate-550";
 
   const agenciesSectionClass = design
@@ -152,11 +157,11 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const agencyCountClass = design ? "font-mono text-[11px] text-foreground" : "font-mono text-[11px] text-slate-550";
 
   const agencyWhyClass = design
-    ? "mt-1.5 font-body text-[13px] leading-relaxed text-foreground"
+    ? "mt-1.5 text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "mt-1.5 font-body text-[13px] leading-relaxed text-slate-550";
 
   const footerClass = design
-    ? "mt-10 border-t border-structure-on-canvas pt-5 font-body text-[12px] leading-relaxed text-foreground"
+    ? "mt-10 border-t border-structure-on-canvas pt-5 text-pretty font-body text-[12px] leading-relaxed text-foreground"
     : "mt-10 border-t border-rule pt-5 font-body text-[12px] leading-relaxed text-slate-550";
 
   return (
@@ -177,7 +182,7 @@ export default function OpportunityMap({ map }: { map: MapT }) {
         {w && (
           <section className={weakFieldClass}>
             <p className={eyebrowClass(design)}>A finding, not a dead end</p>
-            <h2 className="mt-3 font-display text-[24px] font-medium leading-snug">{w.headline}</h2>
+            <h2 className="mt-3 text-balance font-display text-[24px] font-medium leading-snug">{w.headline}</h2>
             <p className={weakFieldBodyClass}>{w.reasoning}</p>
 
             {w.redirects?.length > 0 && (
@@ -186,7 +191,7 @@ export default function OpportunityMap({ map }: { map: MapT }) {
                 <ul className="mt-3 grid gap-4 sm:grid-cols-2">
                   {w.redirects.map((r, i) => (
                     <li key={i} className={redirectItemClass}>
-                      <p className="font-display text-[15px] font-medium">{r.label}</p>
+                      <p className="text-balance font-display text-[15px] font-medium">{r.label}</p>
                       <p className={redirectWhyClass}>{r.why}</p>
                     </li>
                   ))}
@@ -235,8 +240,8 @@ export default function OpportunityMap({ map }: { map: MapT }) {
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {agencyIntelligence.map((a) => (
                 <div key={a.agency}>
-                  <p className="font-display text-[15px] font-medium">{a.agency}</p>
-                  <p className={agencyCountClass}>
+                  <p className="text-balance font-display text-[15px] font-medium">{a.agency}</p>
+                  <p className={`${agencyCountClass} tabular-nums`}>
                     {a.opportunityCount} {a.opportunityCount === 1 ? "opportunity" : "opportunities"}
                   </p>
                   <p className={agencyWhyClass}>{a.why}</p>
@@ -259,7 +264,7 @@ function Cell({ design, n, label }: { design: boolean; n: string; label: string 
   const cellClass = design ? "bg-canvas-alt px-5 py-6 text-foreground" : "bg-paper px-5 py-6";
   return (
     <div className={cellClass}>
-      <div className="font-display text-[30px] font-bold leading-none">{n}</div>
+      <div className="font-display text-[30px] font-bold leading-none tabular-nums">{n}</div>
       <div className={eyebrowClass(design, "mt-2 leading-snug")}>{label}</div>
     </div>
   );

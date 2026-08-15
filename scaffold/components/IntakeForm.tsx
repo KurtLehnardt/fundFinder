@@ -33,8 +33,10 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // FE-02 (R7.1): sample-company picker is collapsed by default; it's a
   // secondary affordance behind a real visual break, not an inline filter row.
   const [samplesOpen, setSamplesOpen] = useState(false);
-  // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
-  const design = isFlagEnabled("r7_design");
+  // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the
+  // DEFAULT on this A/B branch (previously gated behind r7_design). The v1
+  // fallback branches below are retained but no longer reachable.
+  const design = true;
 
   // R1 (FE-03): pre-search interview. Off (default) = today's behavior
   // EXACTLY — beginSearch() below short-circuits straight to run(), and
@@ -209,8 +211,11 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     : "w-full resize-none rounded-sm border border-rule bg-white p-4 font-body text-[15px] leading-relaxed outline-none focus:border-federal focus:ring-2 focus:ring-federal/15";
 
   // The ONLY green surface in the whole app: primary CTA fill (R7.2's 10%).
+  // Polish: soft elevation, lift on hover, and a subtle scale-on-press for
+  // tactile feedback (transition covers transform/shadow/opacity; the global
+  // reduced-motion rule neutralizes the motion).
   const primaryButtonClass = design
-    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white shadow-sm transition hover:opacity-90 hover:shadow active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "min-h-[44px] rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   // FE-02 (R7.1): the sample-company picker lives below a real visual break
@@ -222,17 +227,18 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     : "mt-6 border-t border-rule pt-5";
 
   const sampleTriggerClass = design
-    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "min-h-[44px] rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "min-h-[44px] rounded-sm border border-rule bg-white px-4 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
-  // Expanded picker panel gets its own subtle background-tone shift (on top
-  // of the border-t break above) so it reads as a distinct, optional area.
+  // Expanded picker panel reads as a distinct, optional area. Polish: depth
+  // now comes from an elevation shadow (concentric rounded-lg outer / rounded-sm
+  // items) rather than a hard navy border.
   const samplePanelClass = design
-    ? "mt-3 rounded-sm border border-structure-on-canvas bg-canvas-alt p-4"
+    ? "mt-3 rounded-lg bg-canvas-alt p-4 shadow-card"
     : "mt-3 rounded-sm border border-rule bg-white p-4";
 
   const samplePanelIntroClass = design
-    ? "font-body text-[13px] leading-relaxed text-foreground"
+    ? "text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "font-body text-[13px] leading-relaxed text-slate-550";
 
   // List items, not chips: each is a full-width card with a label + one-line
@@ -241,7 +247,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // (navy on r7_design, federal-blue text on v1) recolor both label and
   // blurb together, matching the required white-on-structure-fill pairing.
   const sampleItemClass = design
-    ? "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-structure-on-canvas bg-canvas px-3.5 py-2.5 text-left transition hover:bg-structure disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    ? "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-structure-on-canvas bg-canvas px-3.5 py-2.5 text-left transition hover:bg-structure hover:shadow-card active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "group flex min-h-[44px] w-full flex-col justify-center gap-0.5 rounded-sm border border-rule bg-paper px-3.5 py-2.5 text-left transition hover:border-federal disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   const sampleItemLabelClass = design
@@ -249,14 +255,14 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     : "font-mono text-[12px] uppercase tracking-eyebrow text-ink group-hover:text-federal";
 
   const sampleItemBlurbClass = design
-    ? "font-body text-[13px] leading-relaxed text-foreground group-hover:text-token-white"
+    ? "text-pretty font-body text-[13px] leading-relaxed text-foreground group-hover:text-token-white"
     : "font-body text-[13px] leading-relaxed text-slate-550 group-hover:text-federal";
 
   // Error state is a legitimate semantic role -> `error` token. As a 2px
   // border (non-text, 3:1 threshold) this passes AA against canvas-alt/canvas
   // (verified ~4.37:1 in the CON-02 report); avoid it as bare small text.
   const errorClass = design
-    ? "mt-4 border-l-2 border-error bg-canvas-alt px-4 py-3 font-body text-sm text-foreground"
+    ? "mt-4 rounded-r-sm border-l-2 border-error bg-canvas-alt px-4 py-3 font-body text-sm text-pretty text-foreground"
     : "mt-4 border-l-2 border-fit-adjacent bg-white px-4 py-3 font-body text-sm text-ink";
 
   // R1 (FE-03): lightweight status while /api/interview is in flight — NOT
@@ -280,18 +286,18 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       />
 
       {mockAuthOn && (
-        <div className="mt-3 border-l-2 border-rule bg-white px-4 py-3">
-          <label className="flex cursor-pointer items-start gap-2.5 font-body text-[13px] leading-relaxed text-ink">
+        <div className="mt-3 rounded-r-sm border-l-2 border-structure-on-canvas bg-canvas-alt px-4 py-3">
+          <label className="flex cursor-pointer items-start gap-2.5 text-pretty font-body text-[13px] leading-relaxed text-foreground">
             <input
               type="checkbox"
               checked={consent.granted}
               onChange={(e) => setConsent(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-federal"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-structure"
             />
             <span>Opt in to sharing anonymized usage data</span>
           </label>
           {consent.granted && consent.grantedAt && (
-            <p className="mt-1.5 pl-[26px] font-mono text-[11px] text-slate-550">
+            <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground">
               Opted in {new Date(consent.grantedAt).toLocaleString()}.
             </p>
           )}
@@ -300,12 +306,12 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
             <button
               type="button"
               onClick={handleDeleteMyData}
-              className="font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline decoration-dotted underline-offset-2 transition hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2"
+              className="font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline decoration-dotted underline-offset-2 transition hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
             >
               Delete my data
             </button>
             {justCleared && (
-              <span className="font-mono text-[11px] text-slate-550">
+              <span className="font-mono text-[11px] text-foreground">
                 Local data cleared.
               </span>
             )}

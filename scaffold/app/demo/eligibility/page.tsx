@@ -23,13 +23,15 @@ export default function EligibilityDemoPage() {
 
   if (!enabled) {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-14 sm:py-20">
+      <main className="mx-auto min-h-screen max-w-4xl bg-canvas px-6 py-14 text-foreground sm:py-20">
         <header>
-          <p className="eyebrow">R8 eligibility screening</p>
-          <h1 className="mt-4 max-w-2xl font-display text-[36px] font-bold leading-[1.08] sm:text-[44px]">
+          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
+            R8 eligibility screening
+          </p>
+          <h1 className="mt-4 max-w-2xl text-balance font-display text-[36px] font-bold leading-[1.08] text-structure-on-canvas sm:text-[44px]">
             Preview disabled
           </h1>
-          <p className="mt-5 max-w-2xl font-body text-[16px] leading-relaxed text-slate-550">
+          <p className="mt-5 max-w-2xl text-pretty font-body text-[16px] leading-relaxed text-foreground">
             R8 eligibility screening preview is behind the default-off{" "}
             <code className="font-mono text-[14px]">r8_eligibility</code> flag — set{" "}
             <code className="font-mono text-[14px]">NEXT_PUBLIC_FLAG_R8_ELIGIBILITY=1</code> to preview.
@@ -40,13 +42,15 @@ export default function EligibilityDemoPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-14 sm:py-20">
-      <header className="mb-12">
-        <p className="eyebrow">R8 eligibility screening</p>
-        <h1 className="mt-4 max-w-2xl font-display text-[40px] font-bold leading-[1.08] sm:text-[52px]">
+    <main className="mx-auto min-h-screen max-w-4xl bg-canvas px-6 py-14 text-foreground sm:py-20">
+      <header className="stagger mb-12">
+        <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
+          R8 eligibility screening
+        </p>
+        <h1 className="mt-4 max-w-2xl text-balance font-display text-[40px] font-bold leading-[1.08] text-structure-on-canvas sm:text-[52px]">
           Eligibility buckets
         </h1>
-        <p className="mt-5 max-w-2xl font-body text-[16px] leading-relaxed text-slate-550">
+        <p className="mt-5 max-w-2xl text-pretty font-body text-[16px] leading-relaxed text-foreground">
           A preview of the three-bucket eligibility display (ELG-01 / R8.2) against fixture
           determinations — eligible, conditionally eligible, needs more info, and excluded. Nothing
           here is a real screening result.
