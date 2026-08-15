@@ -3,6 +3,7 @@ import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import AutoApplyModal from "@/components/AutoApplyModal";
+import AutoApplyFlow from "@/components/AutoApplyFlow";
 import CompetitorAnalysisModal from "@/components/CompetitorAnalysisModal";
 import { useSettingsPanel } from "@/components/AppMenu";
 
@@ -80,6 +81,10 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const design = isFlagEnabled("r7_design");
   // FE-06: locked "Auto Apply" stub — opens the Pro-upsell modal, never submits anything.
   const [autoApplyOpen, setAutoApplyOpen] = useState(false);
+  // R6: when on, "Auto Apply" opens the assisted-apply DEMO stepper instead of
+  // the static upsell modal. Default OFF -> the FE-06 path below is unchanged.
+  // Still a preview: it never submits anything and gates nothing server-side.
+  const assistedApplyFlow = isFlagEnabled("r6_auto_apply");
   // PRO-01: locked "Analyze competing companies" stub — opens a Pro-upsell
   // modal from the award-history section, never runs any analysis.
   const [competitorOpen, setCompetitorOpen] = useState(false);
@@ -265,15 +270,20 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
         <span className={autoApplyHintClass}>Pro feature &middot; not available yet</span>
       </div>
 
-      {autoApplyOpen && (
-        <AutoApplyModal
-          onClose={() => setAutoApplyOpen(false)}
-          onOpenSettings={() => {
-            setAutoApplyOpen(false);
-            openSettings();
-          }}
-        />
-      )}
+      {autoApplyOpen &&
+        (assistedApplyFlow ? (
+          // R6 ON: the walkable assisted-apply demo stepper.
+          <AutoApplyFlow onClose={() => setAutoApplyOpen(false)} />
+        ) : (
+          // R6 OFF (default): the FE-06 static Pro-upsell modal, unchanged.
+          <AutoApplyModal
+            onClose={() => setAutoApplyOpen(false)}
+            onOpenSettings={() => {
+              setAutoApplyOpen(false);
+              openSettings();
+            }}
+          />
+        ))}
 
       {competitorOpen && <CompetitorAnalysisModal onClose={() => setCompetitorOpen(false)} />}
 

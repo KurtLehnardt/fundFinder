@@ -28,6 +28,7 @@ export type FlagName =
   | "r2_verify"
   | "r3_enhance"
   | "r4_progress"
+  | "r6_auto_apply"
   | "r7_design"
   | "r8_eligibility"
   | "r9_0_mockauth"
@@ -74,6 +75,14 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
     requirement: "R4",
     description: "Event-driven streaming progress UI, replacing the fixed fake progress bar.",
     envVar: "NEXT_PUBLIC_FLAG_R4_PROGRESS",
+  },
+  r6_auto_apply: {
+    name: "r6_auto_apply",
+    requirement: "R6",
+    description:
+      "Assisted-apply demo: sign-in → requirements → admin-review-pending walkthrough " +
+      "(preview only; never submits an application, gates nothing server-side).",
+    envVar: "NEXT_PUBLIC_FLAG_R6_AUTO_APPLY",
   },
   r7_design: {
     name: "r7_design",
