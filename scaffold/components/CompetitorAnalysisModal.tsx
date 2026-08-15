@@ -1,56 +1,79 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDialogA11y } from "@/components/useDialogA11y";
+import { useBilling } from "@/components/BillingProvider";
+import { useEntitlements } from "@/lib/entitlements/useEntitlements";
+import CompetitorResults from "@/components/CompetitorResults";
+import demoCompetitorFixture from "@/data/demo-competitor-fastercontrol.json";
 
 /**
- * PRO-01 — Pro-upsell stub shown when someone clicks the locked "Analyze
- * competing companies" button in an opportunity card's award-history
- * section. Competitor analysis (R5) doesn't exist yet; this is honest
- * about that and doesn't take payment, invent stats, or claim a
- * guarantee/federal affiliation (R7.7 / §11). Mirrors AutoApplyModal.tsx's
- * structure and a11y pattern (FE-06).
+ * R5 (PRO-01) — Competitor & Grant Intelligence, Max-gated + demo-first.
+ *
+ * Evolves the old "not built yet" stub into the real demoable slice. Gating
+ * reads the UNIFIED billing interface (Phase-4 #41): the reactive tier from
+ * `useBilling()` is passed into `useEntitlements(tier)`, so this modal never
+ * introduces a second source of truth and stays in sync with the OpportunityCard
+ * padlocks and the sidebar billing selector.
+ *
+ *   - Non-Max (competitorEnabled === false): a "Maximum plan" padlock + honest
+ *     description, a primary "Upgrade to Max" (flips the labeled MOCK billing
+ *     tier — charges nothing), and a secondary "Demo this" that renders the
+ *     captured example.
+ *   - Max (competitorEnabled === true): a primary "View example analysis". The
+ *     LIVE personalized run is a named follow-up (/api/competitors); for now
+ *     both tiers see the SAME real example fixture, honestly labeled as such.
+ *
+ * The example itself (CompetitorResults) is built from REAL public federal award
+ * data captured once (scripts/5-competitors.mjs) and is validated through the
+ * grounding contract at its boundary. It is never presented as a live run and
+ * never fabricates an award or amount (R7.7).
+ *
+ * Portaled to document.body so the fixed overlay escapes the opportunity card's
+ * stacking/overflow context (matching AutoApplyModal); `useDialogA11y` inerts the
+ * background and traps focus. Top-aligned + scrollable for the taller results view.
  */
-
 export default function CompetitorAnalysisModal({ onClose }: { onClose: () => void }) {
-  // Design revamp: USWDS 60/30/10 restyle is the DEFAULT on this A/B branch
-  // (previously gated behind r7_design).
-  const design = true;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
 
-  const panelClass = design
-    ? "relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-structure-on-canvas bg-canvas p-6 text-foreground"
-    : "relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-rule bg-white p-6 text-ink";
+  // Unified billing (Phase-4 #41): reactive tier -> entitlement view.
+  const { tier, setTier } = useBilling();
+  const { competitorEnabled } = useEntitlements(tier);
+  const isMax = competitorEnabled; // competitor_intelligence is a Max-only feature.
 
-  const eyebrowClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "eyebrow";
+  const [showResults, setShowResults] = useState(false);
 
-  const titleClass = design
-    ? "mt-2 font-display text-[24px] font-bold leading-snug text-foreground"
-    : "mt-2 font-display text-[24px] font-bold leading-snug";
+  const panelClass = `relative max-h-[calc(100dvh-4rem)] w-full ${
+    showResults ? "max-w-3xl" : "max-w-lg"
+  } overflow-y-auto rounded-lg border border-structure-on-canvas bg-canvas p-6 text-foreground shadow-overlay`;
 
-  const bodyClass = design
-    ? "mt-3 font-body text-[14px] leading-relaxed text-foreground"
-    : "mt-3 font-body text-[14px] leading-relaxed text-slate-550";
+  const eyebrowClass = "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas";
+  const titleClass = "mt-2 text-balance font-display text-[24px] font-bold leading-snug text-foreground";
+  const bodyClass = "mt-3 text-pretty font-body text-[14px] leading-relaxed text-foreground";
+  const closeIconBtnClass =
+    "absolute right-3 top-3 rounded-sm p-1 text-foreground transition hover:bg-canvas-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
+  const footnoteClass =
+    "mt-6 border-t border-structure-on-canvas pt-4 text-pretty font-body text-[11px] leading-relaxed text-foreground";
 
-  const closeTextBtnClass = design
-    ? "font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+  // Green bg-action is reserved for the ONE primary CTA (R7 60/30/10).
+  const primaryBtnClass =
+    "inline-flex min-h-[44px] items-center rounded-sm bg-action px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
+  const secondaryBtnClass =
+    "inline-flex min-h-[44px] items-center rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas transition hover:bg-structure hover:text-token-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
+  const textBtnClass =
+    "inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-eyebrow text-foreground underline underline-offset-4 transition hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
 
-  const closeIconBtnClass = design
-    ? "absolute right-4 top-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "absolute right-4 top-4 text-slate-550 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+  const recordCount = Array.isArray((demoCompetitorFixture as { records?: unknown[] }).records)
+    ? (demoCompetitorFixture as { records: unknown[] }).records.length
+    : 0;
 
-  const footnoteClass = design
-    ? "mt-6 border-t border-structure-on-canvas pt-4 font-body text-[11px] leading-relaxed text-foreground"
-    : "mt-6 border-t border-rule pt-4 font-body text-[11px] leading-relaxed text-slate-550";
-
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -66,44 +89,88 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
           <XIcon className="h-4 w-4" />
         </button>
 
-        <div className="flex items-center gap-2 pr-8">
-          <LockIcon className="h-3.5 w-3.5" design={design} />
-          <p className={eyebrowClass}>Pro feature &middot; not available yet</p>
-        </div>
+        {showResults ? (
+          <div className="pr-6">
+            <div className="flex items-center justify-between gap-2">
+              <button type="button" onClick={() => setShowResults(false)} className={textBtnClass}>
+                ‹ Back
+              </button>
+            </div>
+            <h2 id="competitor-analysis-modal-title" className="sr-only">
+              Competitor &amp; grant intelligence — example analysis
+            </h2>
+            <p id="competitor-analysis-modal-desc" className="sr-only">
+              An example competitor and grant analysis built from real public federal award data.
+            </p>
+            <div className="mt-3">
+              <CompetitorResults raw={demoCompetitorFixture} />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 pr-8">
+              <LockIcon className="h-3.5 w-3.5" />
+              <p className={eyebrowClass}>{isMax ? "Maximum plan · included" : "Maximum plan"}</p>
+            </div>
 
-        <h2 id="competitor-analysis-modal-title" className={titleClass}>
-          Analyze competing companies
-        </h2>
+            <h2 id="competitor-analysis-modal-title" className={titleClass}>
+              Competitor &amp; grant intelligence
+            </h2>
 
-        <p id="competitor-analysis-modal-desc" className={bodyClass}>
-          Competitor analysis would summarize which companies won similar awards and how your
-          organization's profile compares to them. We haven't built that yet, so nothing is
-          analyzed here today — this screen doesn't look anything up, and it doesn't invent
-          numbers about your competition.
-        </p>
+            <p id="competitor-analysis-modal-desc" className={bodyClass}>
+              Find companies that won federal funding in your space, see how they described themselves
+              to win, and get tailored, cited recommendations for what to emphasize. Every company and
+              dollar amount comes from public federal award records (USAspending, NIH RePORTER, NSF) —
+              nothing is invented, and each one links back to its official source so you can verify it.
+            </p>
 
-        <p className={bodyClass}>
-          When it ships, it will be part of a Pro plan we're building toward. It won't guarantee
-          you an award, and it doesn't imply any endorsement or affiliation with the funding
-          agency or the federal government.
-        </p>
+            {isMax ? (
+              <p className={bodyClass}>
+                Live, personalized analysis of your own company is coming soon. In the meantime, here
+                is a saved example built from {recordCount} real public award records — clearly labeled
+                as an example, not a live run.
+              </p>
+            ) : (
+              <p className={bodyClass}>
+                This is part of the <strong>Maximum</strong> plan. You can preview exactly what it
+                produces right now with a saved example — no upgrade, no charge, no live call.
+              </p>
+            )}
 
-        <div className="mt-6 flex flex-wrap items-center gap-4">
-          <button type="button" onClick={onClose} className={closeTextBtnClass}>
-            Close
-          </button>
-        </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              {isMax ? (
+                <button type="button" onClick={() => setShowResults(true)} className={primaryBtnClass}>
+                  View example analysis
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setTier("max")} className={primaryBtnClass}>
+                    Upgrade to Max
+                  </button>
+                  <button type="button" onClick={() => setShowResults(true)} className={secondaryBtnClass}>
+                    Demo this
+                  </button>
+                </>
+              )}
+              <button type="button" onClick={onClose} className={textBtnClass}>
+                Close
+              </button>
+            </div>
 
-        <p className={footnoteClass}>
-          This is a preview, not a purchase — no payment is collected and no analysis is ever run
-          from this screen.
-        </p>
+            <p className={footnoteClass}>
+              {isMax
+                ? "This screen runs no live analysis and submits nothing. The example uses real, public award data captured once."
+                : "“Upgrade to Max” selects a labeled demo billing tier — it collects no payment and syncs nowhere. It doesn’t imply any endorsement or affiliation with a funding agency or the federal government."}
+            </p>
+          </>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-function LockIcon({ className, design }: { className?: string; design: boolean }) {
+function LockIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 16 16"
@@ -112,7 +179,7 @@ function LockIcon({ className, design }: { className?: string; design: boolean }
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`${className ?? ""} ${design ? "text-structure-on-canvas" : "text-slate-550"}`.trim()}
+      className={`${className ?? ""} text-structure-on-canvas`.trim()}
       aria-hidden="true"
     >
       <rect x="3" y="7" width="10" height="7" rx="1.5" />
