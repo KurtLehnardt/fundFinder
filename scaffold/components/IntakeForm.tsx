@@ -4,11 +4,14 @@ import { TEST_CASES } from "@/lib/testCases";
 import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
+import SearchProgress from "@/components/SearchProgress";
 
 export default function IntakeForm({ onResult }: { onResult: (m: any) => void }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Real pipeline milestone streamed from /api/match (drives SearchProgress).
+  const [progress, setProgress] = useState<{ pct: number; label: string } | null>(null);
   // FE-01: gates the CON-02 USWDS restyle (60/30/10 tokens). Off = v1 look.
   const design = isFlagEnabled("r7_design");
 
@@ -36,19 +39,57 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   async function run(description: string) {
     setLoading(true);
     setError(null);
+    setProgress(null);
     try {
       const res = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Something went wrong.");
-      onResult(json);
+
+      // Validation errors come back as plain JSON (non-streamed).
+      const ctype = res.headers.get("content-type") ?? "";
+      if (!res.ok && ctype.includes("application/json")) {
+        const j = await res.json();
+        throw new Error(j.error ?? "Something went wrong.");
+      }
+      // Fallback for environments without a readable stream: parse as one JSON blob.
+      if (!res.body) {
+        const j = await res.json();
+        onResult(j);
+        return;
+      }
+
+      // Stream: newline-delimited JSON of {type:"progress"|"result"|"error"}.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let streamDone = false;
+      while (!streamDone) {
+        const { value, done } = await reader.read();
+        streamDone = done;
+        if (value) buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let msg: any;
+          try { msg = JSON.parse(line); } catch { continue; }
+          if (msg.type === "progress") {
+            setProgress({ pct: msg.pct ?? 0, label: msg.label ?? "" });
+          } else if (msg.type === "result") {
+            onResult(msg.map);
+          } else if (msg.type === "error") {
+            throw new Error(msg.error ?? "Matching failed.");
+          }
+        }
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
 
@@ -137,10 +178,14 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
           disabled={loading || text.trim().length < 20}
           className={primaryButtonClass}
         >
-          {loading ? "Reading the federal register…" : "Find opportunities"}
+          {loading ? "Searching…" : "Find opportunities"}
         </button>
         <span className={orLabelClass}>or try a test case</span>
       </div>
+
+      {loading && (
+        <SearchProgress design={design} realPct={progress?.pct} realLabel={progress?.label} />
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         {TEST_CASES.map((tc) => (
