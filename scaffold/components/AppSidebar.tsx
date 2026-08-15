@@ -763,7 +763,7 @@ function SidebarSections() {
               </p>
             </div>
           ) : (
-            <a href="/login" onClick={closeDrawer} className={`self-start ${btnClass}`}>
+            <a href="/login" data-tour="signin" onClick={closeDrawer} className={`self-start ${btnClass}`}>
               Sign in
             </a>
           )}

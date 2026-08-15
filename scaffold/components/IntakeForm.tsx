@@ -397,6 +397,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
       <label htmlFor="co" className={labelClass}>Tell us about your company</label>
       <textarea
         id="co"
+        data-tour="describe"
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={5}
@@ -492,6 +493,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
         <div className={sampleSectionClass}>
           <button
             type="button"
+            data-tour="samples"
             onClick={() => setSamplesOpen((open) => !open)}
             aria-expanded={samplesOpen}
             disabled={loading}
