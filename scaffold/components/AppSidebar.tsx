@@ -39,7 +39,6 @@ import { BILLING_TIERS, type BillingTier } from "@/lib/billing/mockBilling";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
-  SIDEBAR_COLLAPSED_PEEK,
   type SidebarSectionId,
 } from "@/lib/sidebar/sidebarPrefs";
 import {
@@ -185,16 +184,8 @@ function DockedSidebar() {
       <aside
         ref={asideRef}
         aria-label="Account and settings"
-        style={{
-          width,
-          // Collapsed → don't hide entirely; leave a small peek so the sidebar
-          // stays discoverable (slightly wider than the re-open icon so it
-          // doesn't collide). Expanded → fully in view.
-          transform: expanded
-            ? "translateX(0)"
-            : `translateX(calc(-100% + ${SIDEBAR_COLLAPSED_PEEK}px))`,
-        }}
-        className="fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-structure-on-canvas/25 bg-canvas text-foreground shadow-overlay transition-transform duration-200 ease-out md:flex"
+        style={{ width }}
+        className={`fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-structure-on-canvas/25 bg-canvas text-foreground shadow-overlay transition-transform duration-200 ease-out md:flex ${expanded ? "translate-x-0" : "-translate-x-full"}`}
       >
         <SidebarHeader
           onRightAction={() => setExpanded(false)}
