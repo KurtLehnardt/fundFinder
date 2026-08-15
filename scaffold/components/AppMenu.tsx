@@ -118,17 +118,17 @@ export default function AppMenu() {
     : "inline-flex min-h-[44px] items-center rounded-sm border border-rule bg-white px-4 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div ref={wrapRef} className="relative">
+    <div className={sidebar ? "" : "flex items-center justify-between gap-3"}>
+      <div ref={wrapRef} className={sidebar ? "fixed left-4 top-4 z-30" : "relative"}>
         <button
           type="button"
           onClick={() => setMenuOpen((o) => !o)}
           aria-haspopup={sidebar ? "dialog" : "menu"}
           aria-expanded={menuOpen}
-          aria-label="Menu"
+          aria-label="Open menu"
           className={hamburgerBtnClass}
         >
-          <HamburgerIcon className="h-4 w-4" />
+          {sidebar ? <SidebarIcon className="h-4 w-4" /> : <HamburgerIcon className="h-4 w-4" />}
         </button>
         {/* FE-07 OFF (default): the original dropdown with its Settings button. */}
         {!sidebar && menuOpen && (
@@ -151,7 +151,9 @@ export default function AppMenu() {
       {/* FE-07 ON: the hamburger opens the left slide-out drawer instead. */}
       {sidebar && menuOpen && <AppSidebar onClose={() => setMenuOpen(false)} />}
 
-      {authOn && !loading && (
+      {/* In sidebar mode the identity + sign-in/out live in the drawer's Account
+          section, so the top-right auth surface is dropped entirely. */}
+      {!sidebar && authOn && !loading && (
         user ? (
           <UserMenu />
         ) : (
@@ -161,6 +163,24 @@ export default function AppMenu() {
         )
       )}
     </div>
+  );
+}
+
+function SidebarIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="9" y1="4" x2="9" y2="20" />
+    </svg>
   );
 }
 

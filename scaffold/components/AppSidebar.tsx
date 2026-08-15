@@ -482,6 +482,28 @@ export default function AppSidebar({ onClose }: { onClose: () => void }) {
         {openSection === "account" && (
           <div className={bodyClass}>
             <div className="flex flex-col gap-3">
+              {/* Identity + sign in/out (moved here from the top-right nav) */}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- external avatar; referrerPolicy avoids Google's 403 */}
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    width={36}
+                    height={36}
+                    referrerPolicy="no-referrer"
+                    className="h-9 w-9 rounded-full"
+                  />
+                  <p className="min-w-0 truncate font-body text-[13px] font-medium text-foreground">
+                    {user.name}
+                  </p>
+                </div>
+              ) : (
+                <a href="/login" onClick={onClose} className={`self-start ${btnClass}`}>
+                  Sign in
+                </a>
+              )}
+
               {/* Delete my data */}
               {confirming === "delete" ? (
                 <div className={rowCardClass} role="group" aria-label="Confirm delete my data">
