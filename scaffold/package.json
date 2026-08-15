@@ -13,11 +13,17 @@
     "data:normalize": "node scripts/2-normalize.mjs",
     "data:embed": "node scripts/3-embed.mjs",
     "data:precompute": "node scripts/4-precompute.mjs",
-    "data:all": "npm run data:fetch && npm run data:normalize && npm run data:embed"
+    "data:all": "npm run data:fetch && npm run data:normalize && npm run data:embed",
+    "check:hex": "node scripts/design/check-hex.mjs",
+    "check:contrast": "node scripts/design/contrast-check.mjs",
+    "test": "tsx --test lib/**/__tests__/**/*.test.ts",
+    "check:prompts": "node scripts/check-prompt-registry.mjs",
+    "canon:seed": "node --import tsx scripts/canon/seed-from-v1.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "next": "14.2.15",
+    "postgres": "^3.4.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.4.3"
