@@ -17,7 +17,7 @@ These five test cases are what the system is judged on. Each shows what a well-c
 | Case | Company | Profile | Expected Outcome |
 |------|---------|---------|------------------|
 | **1. AI Healthcare** | Utah SaaS, 15 people, $1M ARR, raised $2.5M, seeking $500K–$2M | AI-powered software reducing admin burden for nurses; product development & hospital pilots | Strong matches: HHS, NIH, NSF, SBIR/STTR programs; healthcare IT, AI/R&D, workforce development; historical grant recipients in adjacent categories |
-| **2. Advanced Manufacturing** | Utah hardware, 35 people, $3M revenue, raised $8M, seeking $2M–$5M | Lightweight aerospace components; manufacturing scale-up & R&D | Strong matches: DoD, NASA, DOE; procurement, R&D tax credits, aerospace suppliers; similar companies receiving federal awards |
+| **2. Advanced Manufacturing** | Utah hardware, 35 people, $3M revenue, raised $8M, seeking $2M–$5M | Lightweight aerospace components; manufacturing scale-up & R&D | Strong matches: DoD, NASA, DOE; procurement, R&D programs, aerospace/defense; similar companies receiving federal awards |
 | **3. Climate / Water** | Utah startup, 10 people, $500K revenue, raised $1.5M, seeking $500K–$3M | AI sensor platform reducing municipal water loss; product development & pilot deployments | Strong matches: DOE, EPA; water/environmental, infrastructure, climate tech; research funding + government procurement/pilot programs |
 | **4. Cybersecurity** | Utah startup, 22 people, $2M ARR, raised $5M, seeking $1M–$3M | AI threat detection for SMBs; R&D & federal/commercial expansion | Strong matches: DoD, DHS; SBIR/STTR, federal procurement, cyber R&D; historical cybersecurity recipients |
 | **5. Youth Marketplace** | Utah startup, 8 people, $750K revenue, raised $1M, seeking $250K–$1M | Marketplace connecting parents with local youth activities; expansion & tech development | **Honest "Probably Not a Fit"**: marketplace model doesn't align with federal grant mechanics. Redirect to SBA, state/local programs, workforce development, education, community development, youth programs, and Utah economic-dev resources. *This case differentiates the system.* |
@@ -77,13 +77,13 @@ No vector database. A few thousand programs run in-memory cosine similarity and 
 │   ├── docs/
 │   │   └── bounty.md           (the GOED brief & rubric)
 │   ├── scripts/
-│   │   ├── 1-fetch.ts          (Grants.gov, SBIR, USAspending APIs)
-│   │   ├── 2-normalize.ts      (collapse into one schema)
-│   │   └── 3-embed.ts          (OpenAI embeddings, cached)
+│   │   ├── 1-fetch.mjs         (Grants.gov, SBIR, USAspending APIs)
+│   │   ├── 2-normalize.mjs     (collapse into one schema)
+│   │   └── 3-embed.mjs         (OpenAI embeddings, cached)
 │   ├── data/
 │   │   ├── *.json              (government data; committed to repo)
 │   │   └── precomputed.json    (frozen test-case results for demos)
-│   └── pages/api/match.ts      (runtime matching & explanation)
+│   └── app/api/match/route.ts  (runtime matching & explanation)
 ```
 
 ## Deployment
