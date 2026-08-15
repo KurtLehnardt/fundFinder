@@ -31,6 +31,7 @@ export type FlagName =
   | "r7_design"
   | "r8_eligibility"
   | "r9_0_mockauth"
+  | "r9_supabase_auth"
   | "r10_analytics";
 
 export interface FlagDefinition {
@@ -95,6 +96,14 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
     // Matches the mock-auth drop-in's own env var exactly (prompts/mock-auth-bundle.md), so this
     // flag and the drop-in read the same source of truth instead of two independent switches.
     envVar: "NEXT_PUBLIC_MOCK_AUTH",
+  },
+  r9_supabase_auth: {
+    name: "r9_supabase_auth",
+    requirement: "R9",
+    description:
+      "Real Supabase Auth + Google OAuth, drop-in replacing the R9.0 mock. Wins over " +
+      "r9_0_mockauth when both are on. Still gates nothing server-side (§5.3).",
+    envVar: "NEXT_PUBLIC_FLAG_R9_SUPABASE_AUTH",
   },
   r10_analytics: {
     name: "r10_analytics",

@@ -60,7 +60,10 @@ export function SettingsPanelProvider({ children }: { children: ReactNode }) {
 
 export default function AppMenu() {
   const design = isFlagEnabled("r7_design");
-  const mockAuthOn = isFlagEnabled("r9_0_mockauth");
+  // Show the sign-in surface when EITHER auth backend is live: the real
+  // Supabase flag (R9) or the interim mock flag (R9.0). Checking only the mock
+  // flag would hide sign-in when real auth is the one that's on.
+  const authOn = isFlagEnabled("r9_supabase_auth") || isFlagEnabled("r9_0_mockauth");
   const { user, loading } = useAuth();
   const { openSettings } = useSettingsPanel();
 
@@ -132,7 +135,7 @@ export default function AppMenu() {
         )}
       </div>
 
-      {mockAuthOn && !loading && (
+      {authOn && !loading && (
         user ? (
           <UserMenu />
         ) : (

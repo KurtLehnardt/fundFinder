@@ -40,6 +40,7 @@ describe("FLAG_REGISTRY", () => {
       "r7_design",
       "r8_eligibility",
       "r9_0_mockauth",
+      "r9_supabase_auth",
       "r10_analytics",
     ];
     assert.deepEqual(Object.keys(FLAG_REGISTRY).sort(), expected.slice().sort());
