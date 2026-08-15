@@ -37,10 +37,13 @@ describe("FLAG_REGISTRY", () => {
       "r2_verify",
       "r3_enhance",
       "r4_progress",
+      "r6_auto_apply",
       "r7_design",
       "r8_eligibility",
       "r9_0_mockauth",
+      "r9_supabase_auth",
       "r10_analytics",
+      "r4b_cost_debug",
     ];
     assert.deepEqual(Object.keys(FLAG_REGISTRY).sort(), expected.slice().sort());
   });

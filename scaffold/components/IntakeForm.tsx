@@ -4,6 +4,7 @@ import { TEST_CASES } from "@/lib/testCases";
 import { isFlagEnabled } from "@/lib/flags";
 import { useAuth } from "@/components/AuthProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
+import { BRAND } from "@/lib/brand";
 import SearchProgress from "@/components/SearchProgress";
 import PreSearchInterview from "@/components/PreSearchInterview";
 // Type-only: generateQuestions.ts imports the OpenAI SDK at runtime. A
@@ -177,11 +178,12 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     run(originalDescription);
   }
 
-  // FE-02 (R7.1): picking a sample must flow through the same beginSearch()
-  // as a real submission (streaming, SearchProgress, caching, and now the
-  // R1 interview when the flag is on — all untouched/wired identically).
-  // Only confirm-before-overwrite is new, and only when there's meaningful
-  // user text already in the box.
+  // FE-02 (R7.1): picking a sample goes straight to run() (streaming,
+  // SearchProgress, caching — all untouched/wired identically), bypassing
+  // the R1 pre-search interview even when that flag is on: samples are
+  // pre-written and the user has no refining answers to give, so there's
+  // nothing for the interview to ask. Only confirm-before-overwrite is new,
+  // and only when there's meaningful user text already in the box.
   function selectSample(tc: (typeof TEST_CASES)[number]) {
     if (text.trim().length > 0) {
       const ok = window.confirm("Replace your description with this sample company?");
@@ -189,7 +191,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     }
     setText(tc.text);
     setSamplesOpen(false);
-    beginSearch(tc.text);
+    run(tc.text);
   }
 
   const labelClass = design
@@ -287,14 +289,14 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
               className="mt-0.5 h-4 w-4 shrink-0 accent-structure"
             />
             <span>
-              Let fundFinder reuse this description to improve matching for other founders.
-              Off by default — we never use it for anything else, and you can turn it off
-              anytime.
+              Opt in to sharing anonymized usage data so {BRAND} can analyze usage patterns
+              and improve the product. Optional — it never changes your results. Off by
+              default, and you can turn it off anytime.
             </span>
           </label>
           {consent.granted && consent.grantedAt && (
             <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground">
-              Consented {new Date(consent.grantedAt).toLocaleString()}.
+              Opted in {new Date(consent.grantedAt).toLocaleString()}.
             </p>
           )}
 
@@ -370,7 +372,7 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
           {samplesOpen && (
             <div className={samplePanelClass}>
               <p className={samplePanelIntroClass}>
-                These are fictional example companies — pick one to see how fundFinder works.
+                These are fictional example companies — pick one to see how {BRAND} works.
               </p>
               <ul className="mt-3 flex flex-col gap-2">
                 {TEST_CASES.map((tc) => (

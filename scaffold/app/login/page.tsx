@@ -10,10 +10,17 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { isFlagEnabled } from '@/lib/flags';
+import { BRAND } from '@/lib/brand';
 
 export default function LoginPage() {
   const { user, loading, signIn } = useAuth();
   const router = useRouter();
+
+  // With real Supabase auth on, "Continue with Google" is a genuine OAuth
+  // redirect — so drop the "Demo mode" badge and the "simulated sign-in" copy,
+  // which are only true for the mock. Everything else stays as-is.
+  const realAuth = isFlagEnabled('r9_supabase_auth');
 
   // Already signed in? Skip the screen.
   useEffect(() => {
@@ -33,13 +40,16 @@ export default function LoginPage() {
           interior palette stays fixed in both themes so the brand button reads
           correctly; only the page background follows the token canvas. */}
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]">
-        {/* Demo badge — judges should never wonder whether this is real Google auth. */}
-        <span className="mb-6 inline-block rounded-full bg-[#ecf1f7] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#005ea2]">
-          Demo mode
-        </span>
+        {/* Demo badge — judges should never wonder whether this is real Google
+            auth. Shown only for the mock backend; real OAuth drops it. */}
+        {!realAuth && (
+          <span className="mb-6 inline-block rounded-full bg-[#ecf1f7] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#005ea2]">
+            Demo mode
+          </span>
+        )}
 
         <h1 className="text-balance text-2xl font-semibold text-[#212121]">
-          Sign in to fundFinder
+          Sign in to {BRAND}
         </h1>
         <p className="mt-2 text-pretty text-sm leading-relaxed text-[#5b616b]">
           Find federal funding your company can actually apply for.
@@ -54,10 +64,12 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="mt-4 text-center text-xs leading-relaxed text-[#5b616b]">
-          Simulated sign-in for demo purposes. No Google account is contacted and
-          no credentials are collected.
-        </p>
+        {!realAuth && (
+          <p className="mt-4 text-center text-xs leading-relaxed text-[#5b616b]">
+            Simulated sign-in for demo purposes. No Google account is contacted and
+            no credentials are collected.
+          </p>
+        )}
       </div>
     </main>
   );

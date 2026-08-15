@@ -62,7 +62,10 @@ export default function AppMenu() {
   // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
   // on this A/B branch (previously gated behind r7_design).
   const design = true;
-  const mockAuthOn = isFlagEnabled("r9_0_mockauth");
+  // Show the sign-in surface when EITHER auth backend is live: the real
+  // Supabase flag (R9) or the interim mock flag (R9.0). Checking only the mock
+  // flag would hide sign-in when real auth is the one that's on.
+  const authOn = isFlagEnabled("r9_supabase_auth") || isFlagEnabled("r9_0_mockauth");
   const { user, loading } = useAuth();
   const { openSettings } = useSettingsPanel();
 
@@ -137,7 +140,7 @@ export default function AppMenu() {
         )}
       </div>
 
-      {mockAuthOn && !loading && (
+      {authOn && !loading && (
         user ? (
           <UserMenu />
         ) : (

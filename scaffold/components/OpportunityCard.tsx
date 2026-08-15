@@ -2,7 +2,10 @@
 import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
 import AutoApplyModal from "@/components/AutoApplyModal";
+import AutoApplyFlow from "@/components/AutoApplyFlow";
+import CompetitorAnalysisModal from "@/components/CompetitorAnalysisModal";
 import { useSettingsPanel } from "@/components/AppMenu";
+import { isFlagEnabled } from "@/lib/flags";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`;
@@ -80,6 +83,13 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const design = true;
   // FE-06: locked "Auto Apply" stub — opens the Pro-upsell modal, never submits anything.
   const [autoApplyOpen, setAutoApplyOpen] = useState(false);
+  // R6: when on, "Auto Apply" opens the assisted-apply DEMO stepper instead of
+  // the static upsell modal. Default OFF -> the FE-06 path below is unchanged.
+  // Still a preview: it never submits anything and gates nothing server-side.
+  const assistedApplyFlow = isFlagEnabled("r6_auto_apply");
+  // PRO-01: locked "Analyze competing companies" stub — opens a Pro-upsell
+  // modal from the award-history section, never runs any analysis.
+  const [competitorOpen, setCompetitorOpen] = useState(false);
   const { openSettings } = useSettingsPanel();
 
   const spine = TIER_COLOR[m.tier] ?? TIER_COLOR.none;
@@ -171,6 +181,17 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
     ? "font-mono text-[10px] text-foreground"
     : "font-mono text-[10px] text-slate-550";
 
+  // PRO-01: locked "Analyze competing companies" control — same
+  // secondary/structure affordance as Auto Apply above, but lives inside
+  // the "Similar companies funded" history section rather than its own row.
+  const competitorBtnClass = design
+    ? "inline-flex items-center gap-1.5 rounded-sm border border-structure-on-canvas bg-canvas px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+    : "inline-flex items-center gap-1.5 rounded-sm border border-rule bg-white px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow text-slate-550 transition hover:border-federal hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
+
+  const competitorHintClass = design
+    ? "font-mono text-[10px] text-foreground"
+    : "font-mono text-[10px] text-slate-550";
+
   return (
     <article className={articleClass}>
       <span className={spineClass} style={design ? undefined : { background: spine }} aria-hidden />
@@ -195,15 +216,20 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
             <p className={agencyClass}>{o.agency}</p>
           </div>
 
-          <div className="shrink-0 text-right">
-            <div
-              className={design ? "font-display text-[26px] font-bold leading-none tabular-nums text-foreground" : "font-display text-[26px] font-bold leading-none"}
-              style={design ? undefined : { color }}
-            >
-              {m.score}
-              <span className="text-[15px] font-medium">%</span>
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="text-right">
+              <div
+                className={design ? "font-display text-[26px] font-bold leading-none tabular-nums text-foreground" : "font-display text-[26px] font-bold leading-none"}
+                style={design ? undefined : { color }}
+              >
+                {m.score}
+                <span className="text-[15px] font-medium">%</span>
+              </div>
+              <div className={eyebrowClass(design, "mt-1")}>match</div>
             </div>
-            <div className={eyebrowClass(design, "mt-1")}>match</div>
+            <ChevronIcon
+              className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""} ${design ? "text-structure-on-canvas" : "text-slate-550"}`}
+            />
           </div>
         </div>
 
@@ -252,15 +278,22 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
         <span className={autoApplyHintClass}>Pro feature &middot; not available yet</span>
       </div>
 
-      {autoApplyOpen && (
-        <AutoApplyModal
-          onClose={() => setAutoApplyOpen(false)}
-          onOpenSettings={() => {
-            setAutoApplyOpen(false);
-            openSettings();
-          }}
-        />
-      )}
+      {autoApplyOpen &&
+        (assistedApplyFlow ? (
+          // R6 ON: the walkable assisted-apply demo stepper.
+          <AutoApplyFlow onClose={() => setAutoApplyOpen(false)} />
+        ) : (
+          // R6 OFF (default): the FE-06 static Pro-upsell modal, unchanged.
+          <AutoApplyModal
+            onClose={() => setAutoApplyOpen(false)}
+            onOpenSettings={() => {
+              setAutoApplyOpen(false);
+              openSettings();
+            }}
+          />
+        ))}
+
+      {competitorOpen && <CompetitorAnalysisModal onClose={() => setCompetitorOpen(false)} />}
 
       {open && (
         <div className={detailsClass}>
@@ -291,6 +324,24 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                 <Stat design={design} n={m.history.inState} label="in Utah" />
                 <Stat design={design} n={m.history.inVertical} label="in your vertical" />
               </div>
+
+              {/*
+                PRO-01: locked stub only — clicking it never fetches or
+                analyzes anything, it just opens the Pro-upsell modal.
+              */}
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompetitorOpen(true)}
+                  aria-haspopup="dialog"
+                  className={competitorBtnClass}
+                >
+                  <LockIcon className="h-3 w-3" />
+                  Analyze competing companies
+                </button>
+                <span className={competitorHintClass}>Pro feature &middot; not available yet</span>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[440px] font-mono text-[11px] tabular-nums">
                   <thead>
@@ -365,6 +416,26 @@ function LockIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="7" width="10" height="7" rx="1.5" />
       <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+    </svg>
+  );
+}
+
+/** Expand/collapse affordance for the collapsible card header. Points down when
+ * collapsed, rotates 180deg (via the caller's `rotate-180` class) when expanded.
+ * Decorative only — the header button already carries `aria-expanded`. */
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 6l4 4 4-4" />
     </svg>
   );
 }

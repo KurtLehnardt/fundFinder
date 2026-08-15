@@ -27,7 +27,8 @@ const FACTS: string[] = [
   "Companies often qualify for more programs than they expect — that's exactly what this search is checking.",
 ];
 
-const FACT_EVERY = 8; // seconds per fact
+const FACT_MIN_MS = 10_000; // rotate the "did you know" facts on a randomized
+const FACT_MAX_MS = 15_000; // 10–15s dwell — slow enough to read, varied enough to stay engaging
 const TICK_MS = 200;
 const EASE_K = 0.008; // per-tick ease toward the phase cap (~90% of a gap in ~60s)
 
@@ -55,6 +56,7 @@ export default function SearchProgress({
 }) {
   const [display, setDisplay] = useState(4);
   const [elapsed, setElapsed] = useState(0);
+  const [factIndex, setFactIndex] = useState(0);
   const floorRef = useRef(0);
 
   // A real milestone raises the monotonic floor and snaps the bar up to include it.
@@ -79,8 +81,28 @@ export default function SearchProgress({
     return () => window.clearInterval(id);
   }, []);
 
+  // Rotate the "did you know" facts on a randomized 10–15s dwell — decoupled from
+  // the progress ticker so it reads at a comfortable, non-jumpy pace.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number;
+    const schedule = () => {
+      const delay = FACT_MIN_MS + Math.random() * (FACT_MAX_MS - FACT_MIN_MS);
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        setFactIndex((i) => (i + 1) % FACTS.length);
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   const label = realLabel || "Reading the federal register…";
-  const fact = FACTS[Math.floor(elapsed / FACT_EVERY) % FACTS.length];
+  const fact = FACTS[factIndex];
   const mm = Math.floor(elapsed / 60);
   const ss = Math.floor(elapsed % 60).toString().padStart(2, "0");
   const pct = Math.round(display);
