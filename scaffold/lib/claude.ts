@@ -65,12 +65,7 @@ export async function explainMatches(
   profile: StartupProfile,
   candidates: Opportunity[]
 ): Promise<Array<{ id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string }>> {
-  const msg = await client().messages.create({
-    model: MODEL,
-    // ~700-900 tokens per assessment; must cover candidateCount candidates or the
-    // JSON array is truncated mid-string and parseJson throws. Keep >= candidateCount * 900.
-    max_tokens: 24000,
-    system: `You assess fit between a startup and federal funding opportunities.
+  const SYSTEM = `You assess fit between a startup and federal funding opportunities.
 
 Return ONLY a JSON array, no preamble, no markdown fences:
 [{
@@ -106,24 +101,43 @@ RULES THAT MATTER MORE THAN COVERAGE:
    Mark met honestly. Unmet criteria are informative, not failures to hide.
 
 5. Write for a founder, not a bureaucrat. Plain language. No jargon left
-   untranslated.`,
-    messages: [
-      {
-        role: "user",
-        content: `COMPANY:\n${JSON.stringify(profile, null, 2)}\n\nCANDIDATE OPPORTUNITIES:\n${JSON.stringify(
-          candidates.map((c) => ({
-            id: c.id, program: c.program, agency: c.agency, kind: c.kind,
-            description: c.description.slice(0, 1200), eligibility: c.eligibility,
-            fundingLow: c.fundingLow, fundingHigh: c.fundingHigh, deadline: c.deadline,
-          })),
-          null, 2
-        )}`,
-      },
-    ],
-  });
+   untranslated.`;
 
-  const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
-  return parseJson(text);
+  type Assessment = { id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string };
+
+  // Score in parallel batches. A single serial call over all candidates emits
+  // ~700-900 output tokens each and dominates request latency (~3 min for 24
+  // candidates); concurrent batches cut wall-clock ~3x with identical per-
+  // candidate scoring. max_tokens per batch stays well clear of truncation.
+  const BATCH = 8;
+  const groups: Opportunity[][] = [];
+  for (let i = 0; i < candidates.length; i += BATCH) groups.push(candidates.slice(i, i + BATCH));
+
+  const scoreGroup = async (group: Opportunity[]): Promise<Assessment[]> => {
+    const msg = await client().messages.create({
+      model: MODEL,
+      max_tokens: 8000, // ~900/assessment * 8 = 7200, fits with margin
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `COMPANY:\n${JSON.stringify(profile, null, 2)}\n\nCANDIDATE OPPORTUNITIES:\n${JSON.stringify(
+            group.map((c) => ({
+              id: c.id, program: c.program, agency: c.agency, kind: c.kind,
+              description: c.description.slice(0, 1200), eligibility: c.eligibility,
+              fundingLow: c.fundingLow, fundingHigh: c.fundingHigh, deadline: c.deadline,
+            })),
+            null, 2
+          )}`,
+        },
+      ],
+    });
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    return parseJson<Assessment[]>(text);
+  };
+
+  const batchResults = await Promise.all(groups.map(scoreGroup));
+  return batchResults.flat();
 }
 
 /**
