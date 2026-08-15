@@ -24,13 +24,14 @@ export function UserMenu() {
   };
 
   return (
-    <div className="flex items-center gap-3">
-      {/* eslint-disable-next-line @next/next/no-img-element -- inline SVG data URI */}
+    <div className="flex min-h-[44px] items-center gap-3">
+      {/* eslint-disable-next-line @next/next/no-img-element -- external avatar; referrerPolicy avoids Google's 403 on lh3.googleusercontent.com */}
       <img
         src={user.avatarUrl}
         alt=""
         width={32}
         height={32}
+        referrerPolicy="no-referrer"
         className="rounded-full"
       />
       <span className="hidden text-sm font-medium text-[#212121] sm:inline">
