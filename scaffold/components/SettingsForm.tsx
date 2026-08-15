@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   getAutoApplyRequirements,
   setAutoApplyRequirements,
@@ -28,6 +28,14 @@ import {
 export default function SettingsForm({ onClose }: { onClose?: () => void }) {
   const [form, setForm] = useState<AutoApplyRequirements>(() => getAutoApplyRequirements());
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  // Instance-unique ids / radio-group name (useId) so two mounted instances —
+  // the drawer's inline Settings section and the SettingsPanel modal — never
+  // share DOM ids or a radio `name` and cross-wire each other (frontend review
+  // LOW; latent today since the two never mount simultaneously).
+  const uid = useId();
+  const ueiId = `${uid}-uei`;
+  const aorNameId = `${uid}-aor-name`;
+  const samRadioName = `${uid}-samRegistered`;
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -60,7 +68,7 @@ export default function SettingsForm({ onClose }: { onClose?: () => void }) {
           <label className={`flex items-center gap-1.5 ${labelTextClass}`}>
             <input
               type="radio"
-              name="samRegistered"
+              name={samRadioName}
               checked={form.samRegistered === true}
               onChange={() => update("samRegistered", true)}
             />
@@ -69,7 +77,7 @@ export default function SettingsForm({ onClose }: { onClose?: () => void }) {
           <label className={`flex items-center gap-1.5 ${labelTextClass}`}>
             <input
               type="radio"
-              name="samRegistered"
+              name={samRadioName}
               checked={form.samRegistered === false}
               onChange={() => update("samRegistered", false)}
             />
@@ -90,11 +98,11 @@ export default function SettingsForm({ onClose }: { onClose?: () => void }) {
       </fieldset>
 
       <div className={fieldWrapClass}>
-        <label className={legendClass} htmlFor="settings-uei">
+        <label className={legendClass} htmlFor={ueiId}>
           UEI (Unique Entity Identifier)
         </label>
         <input
-          id="settings-uei"
+          id={ueiId}
           type="text"
           value={form.uei}
           onChange={(e) => update("uei", e.target.value)}
@@ -105,10 +113,10 @@ export default function SettingsForm({ onClose }: { onClose?: () => void }) {
 
       <fieldset className={fieldWrapClass}>
         <legend className={legendClass}>Authorized AOR</legend>
-        <label className={`mt-2 block ${labelTextClass}`} htmlFor="settings-aor-name">
+        <label className={`mt-2 block ${labelTextClass}`} htmlFor={aorNameId}>
           Name
           <input
-            id="settings-aor-name"
+            id={aorNameId}
             type="text"
             value={form.aorName}
             onChange={(e) => update("aorName", e.target.value)}

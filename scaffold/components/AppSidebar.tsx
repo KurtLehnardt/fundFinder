@@ -68,7 +68,7 @@ const STATUS_ORDER: GrantStatus[] = ["unapplied", "pending", "granted"];
 
 // ---- shared token class strings -------------------------------------------
 const bodyClass = "px-4 pb-5 pt-1";
-const noteClass = "font-body text-[12px] leading-relaxed text-foreground/70";
+const noteClass = "font-body text-[12px] leading-relaxed text-foreground";
 const sectionLabelClass =
   "font-mono text-[12px] uppercase tracking-eyebrow text-foreground";
 const inputClass =
@@ -381,6 +381,10 @@ function SidebarSections() {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState("");
   const [versionDrafts, setVersionDrafts] = useState<Record<string, string>>({});
+  // Per-description delete confirm: Delete wipes a description AND all its saved
+  // versions with no undo, so require an explicit confirm (frontend review
+  // MEDIUM) — consistent with the drawer's "Delete my data"/"Close account".
+  const [confirmDeleteDescId, setConfirmDeleteDescId] = useState<string | null>(null);
 
   const [confirming, setConfirming] = useState<null | "delete" | "close">(null);
   const [justCleared, setJustCleared] = useState(false);
@@ -487,7 +491,7 @@ function SidebarSections() {
             <span>Opt in to sharing anonymized usage data</span>
           </label>
           {consent.granted && consent.grantedAt && (
-            <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground/70">
+            <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground">
               Opted in {new Date(consent.grantedAt).toLocaleString()}.
             </p>
           )}
@@ -635,14 +639,38 @@ function SidebarSections() {
                         >
                           Rename
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDescriptions(deleteDescription(d.id))}
-                          aria-label={`Delete ${d.name}`}
-                          className={linkBtnClass}
-                        >
-                          Delete
-                        </button>
+                        {confirmDeleteDescId === d.id ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDescriptions(deleteDescription(d.id));
+                                setConfirmDeleteDescId(null);
+                              }}
+                              aria-label={`Confirm delete ${d.name} and all its versions`}
+                              className={dangerBtnClass}
+                            >
+                              Delete all versions
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteDescId(null)}
+                              aria-label="Cancel delete"
+                              className={linkBtnClass}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteDescId(d.id)}
+                            aria-label={`Delete ${d.name}`}
+                            className={linkBtnClass}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -680,7 +708,7 @@ function SidebarSections() {
                         return (
                           <li key={v.id} className={versionRowClass}>
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-[10px] text-foreground/70">
+                              <span className="font-mono text-[10px] text-foreground">
                                 {new Date(v.createdAt).toLocaleString()}
                                 {isActive ? " · active" : ""}
                               </span>
@@ -842,7 +870,7 @@ function SidebarSections() {
                       {t.priceLabel}
                     </span>
                   </span>
-                  <span className="font-body text-[12px] leading-relaxed text-foreground/70">
+                  <span className="font-body text-[12px] leading-relaxed text-foreground">
                     {t.blurb}
                   </span>
                 </button>
