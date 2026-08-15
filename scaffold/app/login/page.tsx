@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { isFlagEnabled } from '@/lib/flags';
+import { BRAND } from '@/lib/brand';
 
 export default function LoginPage() {
   const { user, loading, signIn } = useAuth();
@@ -45,7 +46,7 @@ export default function LoginPage() {
         )}
 
         <h1 className="text-pretty text-2xl font-semibold text-[#212121]">
-          Sign in to fundFinder
+          Sign in to {BRAND}
         </h1>
         <p className="mt-2 text-pretty text-sm leading-relaxed text-[#5b616b]">
           Find federal funding your company can actually apply for.
