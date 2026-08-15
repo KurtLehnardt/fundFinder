@@ -71,9 +71,11 @@ import {
  * and a wrong parse is a false exclusion — the single worst failure here). So
  * the engine evaluates ONLY rules that arrive with one of these predicates. The
  * universal overlay is mapped to predicates internally; per-opportunity rules
- * supply theirs via `ScreeningRule.predicate` (a future rule-structuring layer,
- * or the fixtures/tests). A rule with no recognized predicate is advisory: it is
- * never a gate and never affects the bucket.
+ * supply theirs via `ScreeningRule.predicate` — either a reviewed rule-structuring
+ * layer (`fromEligibilityRule(rule, { predicate })`, the H10 reviewed-rule path)
+ * or the deterministic safe-category mapper (`safeCategoryPredicate`), or the
+ * fixtures/tests. A rule with no recognized predicate is advisory: it is never a
+ * gate and never affects the bucket.
  */
 export type RulePredicate =
   /** Eligible only if the profile's entity type is one of `allowed`. */
@@ -328,7 +330,17 @@ export function screen(
   rules?: ScreeningRule[],
 ): EligibilityDetermination {
   const perOpp: ScreeningRule[] =
-    rules ?? (opportunity.eligibility_rules ?? []).map(fromEligibilityRule);
+    rules ??
+    // Structure each CON-01 rule into a ScreeningRule. `mapSafeCategories`
+    // attaches a predicate ONLY for the deterministically-safe categories (today:
+    // `registration` → a CONDITIONAL SAM.gov step — never an exclusion). Every
+    // other category needs free-text parsing to build a predicate, which this
+    // engine refuses, so it stays advisory (no predicate) exactly as before. The
+    // explicit arrow also avoids `.map`'s (element, index, array) footgun feeding
+    // the array index in as the options argument.
+    (opportunity.eligibility_rules ?? []).map((r) =>
+      fromEligibilityRule(r, { mapSafeCategories: true }),
+    );
 
   const universal = universalRulesForOpportunity({
     title: opportunity.title ?? "",
@@ -432,15 +444,105 @@ export function screen(
 // Small builders
 // ---------------------------------------------------------------------------
 
-/** Map a plain CON-01 `EligibilityRule` to a `ScreeningRule` (no predicate). */
-export function fromEligibilityRule(r: EligibilityRule): ScreeningRule {
-  return {
+/**
+ * DETERMINISTIC category → predicate mapper (H10). Maps ONLY the SAFE,
+ * unambiguous categories where the structured `EligibilityRuleCategory` ALONE
+ * implies a predicate with ZERO free-text parsing:
+ *
+ *   - `registration` → `{ kind: "sam_registration_required" }`, gate_kind
+ *     `conditional`. Safe for ANY provenance: a conditional gate can only ever
+ *     become a `required_step` or a `satisfied` — NEVER an `excluded` and never
+ *     even an `unknown` (invariant 3). So even a `model_inferred` registration
+ *     rule can at most add a SAM.gov step (→ `conditionally_eligible`).
+ *
+ * Every other category is left `undefined` (advisory, exactly as today). They
+ * need free-text parsing to build a predicate — an entity list, an employee
+ * NUMBER, a designation, a cert list, an ownership assertion — which is exactly
+ * the fabrication risk this engine refuses. In particular `size_ownership` is
+ * deliberately NOT mapped: it conflates a size gate (a number that would have to
+ * be parsed from prose) with an ownership gate, so it is ambiguous and stays
+ * advisory rather than risking a wrong parse → a false exclusion.
+ */
+export function safeCategoryPredicate(
+  category: EligibilityRuleCategory,
+): { predicate: RulePredicate; gate_kind: "conditional" | "categorical" } | undefined {
+  if (category === "registration") {
+    return { predicate: { kind: "sam_registration_required" }, gate_kind: "conditional" };
+  }
+  return undefined;
+}
+
+/** Default gate kind for a supplied predicate (only registration is conditional). */
+function defaultGateKind(pred: RulePredicate): "conditional" | "categorical" {
+  return pred.kind === "sam_registration_required" ? "conditional" : "categorical";
+}
+
+/** Options for structuring a per-opportunity `EligibilityRule` into a `ScreeningRule`. */
+export interface FromEligibilityRuleOptions {
+  /**
+   * REVIEWED-RULE PATH (H10). A structured, machine-evaluable predicate supplied
+   * by a rule-structuring / review layer — NOT inferred from prose by this engine
+   * (that would be a fabrication risk). When present, the resulting rule can be
+   * gated by `screen()`. It gates an EXCLUSION only through the engine's existing
+   * single exclusion path, which additionally requires the rule's `provenance` to
+   * be reviewed (`verified`/`user_stated`) AND the failing profile fact to be
+   * trustworthy. A `model_inferred` predicate can therefore reach only `unknown`
+   * (a failing categorical gate) or `conditionally_eligible` (a conditional
+   * gate) — NEVER `excluded`.
+   */
+  predicate?: RulePredicate;
+  /** Override the gate kind (otherwise derived from the predicate/category). */
+  gate_kind?: "conditional" | "categorical";
+  /**
+   * Apply the deterministic `safeCategoryPredicate` mapper when no explicit
+   * `predicate` is supplied. OFF by default so callers that pass no options get
+   * byte-identical output to the legacy behavior (a plain advisory rule, no
+   * predicate).
+   */
+  mapSafeCategories?: boolean;
+}
+
+/**
+ * Map a CON-01 `EligibilityRule` to a `ScreeningRule`.
+ *
+ * With no options this is the legacy behavior: an advisory rule with NO
+ * predicate (never a gate). Supply `opts.predicate` (the reviewed-rule path) or
+ * `opts.mapSafeCategories` (the deterministic safe-category mapper) to give the
+ * rule a machine-evaluable predicate so `screen()` can act on it.
+ *
+ * SAFETY: this only structures the rule; it does NOT weaken any screen()
+ * invariant. Whether a predicated rule can drive `excluded` is decided solely by
+ * screen()'s unchanged exclusion path (reviewed provenance + trustworthy fact).
+ * A `model_inferred` rule reaches at most `unknown`/`conditionally_eligible`.
+ */
+export function fromEligibilityRule(
+  r: EligibilityRule,
+  opts: FromEligibilityRuleOptions = {},
+): ScreeningRule {
+  const rule: ScreeningRule = {
     id: r.id,
     category: r.category,
     description: r.description,
     provenance: r.provenance,
     citation: r.citation,
+    _origin: "per_opp",
   };
+
+  const mapped =
+    opts.predicate !== undefined
+      ? { predicate: opts.predicate, gate_kind: defaultGateKind(opts.predicate) }
+      : opts.mapSafeCategories
+        ? safeCategoryPredicate(r.category)
+        : undefined;
+
+  if (mapped) {
+    rule.predicate = mapped.predicate;
+    rule.gate_kind = opts.gate_kind ?? mapped.gate_kind;
+  } else if (opts.gate_kind) {
+    rule.gate_kind = opts.gate_kind;
+  }
+
+  return rule;
 }
 
 function registrationStep(r: ScreeningRule): RequiredStep {
