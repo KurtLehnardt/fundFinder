@@ -5,10 +5,29 @@ import type { CostMeter } from "./metering/meter";
 
 const MODEL = "claude-sonnet-4-6";
 
+/**
+ * H2 (review) — an explicit per-call Anthropic timeout BELOW the route's
+ * `maxDuration = 120` (app/api/match/route.ts). The SDK default is ~10 minutes,
+ * so without this a hung/slow call runs past the 120s platform ceiling and
+ * Vercel silently kills the whole function — discarding an in-flight (and
+ * already partially-computed) search with no error the client can show. With
+ * this timeout the SDK throws an `APIConnectionTimeoutError` we can propagate
+ * to the route's try/catch, which streams a real `type: "error"` NDJSON line.
+ *
+ * `maxRetries: 0` is deliberate: within a ~120s budget an SDK-level retry of the
+ * long scoring call would itself blow the ceiling, recreating the silent kill
+ * this guard prevents. The batch fan-out in `explainMatches` is already
+ * fault-tolerant (Promise.allSettled) — a single timed-out batch degrades to
+ * partial results rather than failing the search.
+ *
+ * Tunable via `ANTHROPIC_TIMEOUT_MS` (must stay < the deploy's maxDuration).
+ */
+const ANTHROPIC_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS) || 100_000;
+
 function client() {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
-  return new Anthropic({ apiKey: key });
+  return new Anthropic({ apiKey: key, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
 }
 
 /** Strip markdown fences some models add around JSON. */

@@ -1,15 +1,40 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import IntakeForm from "@/components/IntakeForm";
 import OpportunityMap from "@/components/OpportunityMap";
 import type { OpportunityMap as MapT } from "@/lib/types";
 import AppMenu from "@/components/AppMenu";
+import { useAnalytics } from "@/components/AnalyticsProvider";
 
 // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the DEFAULT
 // look on this A/B branch (previously gated behind r7_design). The token
 // classes are applied unconditionally here.
 export default function Home() {
   const [map, setMap] = useState<MapT | null>(null);
+  const analytics = useAnalytics();
+
+  // H5 (R10.1) — funnel emit at the real "result shown" call site: when a map
+  // renders. A normal result fires `first_result_rendered`; the honest-no
+  // finding (weak field) fires `run_completed` with `honest_no`. Both are
+  // counts/flags only (no description content), and no-op unless r10_analytics
+  // is on. Keyed on the map object (a fresh one per search) so it fires once.
+  useEffect(() => {
+    if (!map) return;
+    const resultsShown = map.matches.length;
+    if (resultsShown > 0) {
+      analytics.firstResultRendered({
+        results_shown: resultsShown,
+        high_potential: map.summary.highPotential,
+      });
+    }
+    if (map.weakFieldFinding) {
+      analytics.runCompleted({ honest_no: true, high_potential: map.summary.highPotential });
+    } else if (resultsShown === 0) {
+      analytics.runCompleted({ results_shown: 0 });
+    }
+    // analytics identity is stable (useMemo in the provider); map drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl bg-canvas px-6 py-14 text-foreground sm:py-20">

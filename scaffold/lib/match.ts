@@ -29,25 +29,60 @@ export const CALIBRATION = {
   weakFieldThreshold: 1,
 };
 
-/** Hard eligibility gates. Rules, not embeddings — these are binary facts. */
-function ruleGate(opp: Opportunity, profile: StartupProfile): boolean {
-  const emp = profile.employees ?? 0;
-  // SBIR/STTR: US small business, generally under 500 employees.
-  if (opp.source === "sbir" && emp > 500) return false;
-  // Anything explicitly restricted to universities or governments.
-  const e = (opp.eligibility ?? "").toLowerCase();
-  if (/only.*(institutions of higher education|state governments|tribal)/.test(e) && emp > 0) return false;
-  return true;
-}
+/**
+ * C1 (architectural review): the legacy v1 `ruleGate()` pre-filter was REMOVED.
+ *
+ * It ran BEFORE the ELG-01 engine and silently dropped opportunities that then
+ * reached no bucket at all — violating R8.2 ("never silently drop") and R8.4
+ * ("never exclude on a model-inferred fact"). Both of its branches were
+ * eligibility exclusions, NOT retrieval heuristics, so nothing conservative
+ * remained to keep:
+ *   1. `source==="sbir" && employees>500` gated on a MODEL-INFERRED employee
+ *      count (`bridge.ts` marks `employees` as `model_inferred`). `screen()`
+ *      renders exactly this fact as `unknown`, never `excluded`.
+ *   2. `/only.*(IHE|state|tribal)/` over free-text eligibility prose — a greedy
+ *      regex that matched 40/476 live corpus opps, including permissive
+ *      multi-entity NOFOs (e.g. `grants-353936`, open to nonprofits AND IHEs),
+ *      dropping them as if they were "IHE-only".
+ *
+ * `screen()` is now the SOLE eligibility authority: a size/entity mismatch flows
+ * through the engine as `unknown`/`conditionally_eligible` (or, only for a
+ * reviewed+trustworthy rule on a trustworthy fact, a VISIBLE `excluded`), never a
+ * pre-screen silent drop.
+ */
 
-function tierFromScore(score: number): Tier {
+/**
+ * Testability seam (H6): the real LLM/embedding/screen calls and the static
+ * corpus are injectable so `buildOpportunityMap` can be exercised hermetically
+ * (no network, no live model spend). Production callers omit `deps` and get the
+ * real implementations; tests pass mocks + a fixture corpus.
+ */
+export type BuildDeps = {
+  extractProfile: typeof extractProfile;
+  embed: typeof embed;
+  explainMatches: typeof explainMatches;
+  explainWeakField: typeof explainWeakField;
+  screen: typeof screen;
+  corpus: Opportunity[];
+};
+
+const REAL_DEPS: BuildDeps = {
+  extractProfile,
+  embed,
+  explainMatches,
+  explainWeakField,
+  screen,
+  corpus: corpus as unknown as Opportunity[],
+};
+
+export function tierFromScore(score: number): Tier {
   if (score >= 75) return "likely";
   if (score >= CALIBRATION.scoreFloor) return "verify";
   if (score >= 25) return "adjacent";
   return "none";
 }
 
-function historyFor(oppId: string, state?: string): AwardHistory | undefined {
+export function historyFor(oppId: string, state?: string): AwardHistory | undefined {
   const rows = (awards as any)[oppId];
   if (!rows || rows.length === 0) return undefined;
   const amounts = rows.map((r: any) => r.amount).sort((a: number, b: number) => a - b);
@@ -95,7 +130,9 @@ function finalizeCost(meter: CostMeter, result: OpportunityMap): void {
 export async function buildOpportunityMap(
   description: string,
   onStep?: (e: StepEvent) => void,
+  deps: Partial<BuildDeps> = {},
 ): Promise<OpportunityMap> {
+  const d: BuildDeps = { ...REAL_DEPS, ...deps };
   // Progress is best-effort: a reporting error must never fail the search.
   const step = (e: StepEvent) => { try { onStep?.(e); } catch { /* ignore */ } };
   step({ key: "start", label: "Reading the federal register…", pct: 5 });
@@ -106,7 +143,7 @@ export async function buildOpportunityMap(
   const meter = createCostMeter();
 
   // 1 + 2. Intake and adaptive follow-ups.
-  const { profile, followUps } = await extractProfile(description, meter);
+  const { profile, followUps } = await d.extractProfile(description, meter);
   step({ key: "profile", label: "Understood your company", pct: 18 });
 
   // 3. Semantic expansion — embed the founder profile plus expanded gov terms.
@@ -118,12 +155,12 @@ export async function buildOpportunityMap(
     profile.targetCustomers,
     (profile.expandedTerms ?? []).join(", "),
   ].filter(Boolean).join("\n");
-  const queryVec = await embed(queryText, meter);
+  const queryVec = await d.embed(queryText, meter);
   step({ key: "embed", label: "Searching 476 programs", pct: 32 });
 
-  // 4. Hybrid retrieval: rules gate, then similarity, then LLM scoring.
-  const scored = (corpus as unknown as Opportunity[])
-    .filter((o) => ruleGate(o, profile))
+  // 4. Hybrid retrieval: similarity, then LLM scoring. No pre-screen eligibility
+  //    filter — every retrieved candidate is screened by screen() (C1).
+  const scored = d.corpus
     .map((o) => ({ o, sim: o.embedding ? cosine(queryVec, o.embedding) : 0 }))
     .filter((x) => x.sim >= CALIBRATION.candidateFloor)
     .sort((a, b) => b.sim - a.sim)
@@ -132,11 +169,11 @@ export async function buildOpportunityMap(
 
   if (scored.length === 0) {
     step({ key: "weak", label: "Writing your finding…", pct: 80 });
-    return weakField(profile, followUps, meter);
+    return weakField(profile, followUps, meter, d.explainWeakField);
   }
 
   step({ key: "score", label: "Scoring and explaining your matches", pct: 52 });
-  const assessments = await explainMatches(profile, scored.map((s) => s.o), meter);
+  const assessments = await d.explainMatches(profile, scored.map((s) => s.o), meter);
   step({ key: "assemble", label: "Writing your opportunity map", pct: 90 });
   const byId = new Map(scored.map((s) => [s.o.id, s.o]));
 
@@ -173,7 +210,7 @@ export async function buildOpportunityMap(
   const companyProfile = toCompanyProfile(profile);
   for (const m of matches) {
     try {
-      const determination = screen(companyProfile, toScreenableOpportunity(m.opportunity));
+      const determination = d.screen(companyProfile, toScreenableOpportunity(m.opportunity));
       m.eligibility = annotateFreshness(determination);
     } catch {
       // Screening failed for this one match — omit `eligibility`, keep going.
@@ -185,7 +222,7 @@ export async function buildOpportunityMap(
 
   // 5. The honest no. Weak field is a finding, not an empty state.
   const weak = strong.length < CALIBRATION.weakFieldThreshold
-    ? await explainWeakField(profile, meter)
+    ? await d.explainWeakField(profile, meter)
     : undefined;
 
   const now = Date.now();
@@ -217,13 +254,18 @@ export async function buildOpportunityMap(
   return result;
 }
 
-async function weakField(profile: StartupProfile, followUps: string[], meter: CostMeter): Promise<OpportunityMap> {
+async function weakField(
+  profile: StartupProfile,
+  followUps: string[],
+  meter: CostMeter,
+  explainWeak: typeof explainWeakField = explainWeakField,
+): Promise<OpportunityMap> {
   const result: OpportunityMap = {
     profile,
     followUps,
     summary: { highPotential: 0, fundingIdentified: 0, agencies: 0, closingIn90Days: 0 },
     matches: [],
-    weakFieldFinding: await explainWeakField(profile, meter),
+    weakFieldFinding: await explainWeak(profile, meter),
     agencyIntelligence: [],
   };
   finalizeCost(meter, result);
