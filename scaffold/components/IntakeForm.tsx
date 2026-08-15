@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
 import { clearAllLocalData } from "@/lib/mockAuth";
 import { BRAND } from "@/lib/brand";
+import Swal from "sweetalert2";
 import SearchProgress from "@/components/SearchProgress";
 import PreSearchInterview from "@/components/PreSearchInterview";
 // Type-only: generateQuestions.ts imports the OpenAI SDK at runtime. A
@@ -205,10 +206,23 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   // pre-written and the user has no refining answers to give, so there's
   // nothing for the interview to ask. Only confirm-before-overwrite is new,
   // and only when there's meaningful user text already in the box.
-  function selectSample(tc: (typeof TEST_CASES)[number]) {
+  async function selectSample(tc: (typeof TEST_CASES)[number]) {
     if (text.trim().length > 0) {
-      const ok = window.confirm("Replace your description with this sample company?");
-      if (!ok) return;
+      const result = await Swal.fire({
+        title: "Replace your description?",
+        text: "This sample company will replace what you've written in the box.",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Replace",
+        cancelButtonText: "Keep mine",
+        reverseButtons: true,
+        // Token CSS vars → the modal adapts to light/dark like the rest of the app.
+        background: "var(--color-canvas-alt)",
+        color: "var(--color-foreground)",
+        confirmButtonColor: "var(--color-action)",
+        cancelButtonColor: "var(--color-structure-fill)",
+      });
+      if (!result.isConfirmed) return;
     }
     setText(tc.text);
     setSamplesOpen(false);
@@ -311,11 +325,6 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
             />
             <span>Opt in to sharing anonymized usage data</span>
           </label>
-          {consent.granted && consent.grantedAt && (
-            <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground">
-              Opted in {new Date(consent.grantedAt).toLocaleString()}.
-            </p>
-          )}
 
           {/* FE-07: flag ON -> Delete my data lives in the drawer's Account
               section instead, so it's dropped here. The consent checkbox above

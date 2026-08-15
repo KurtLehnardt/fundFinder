@@ -61,7 +61,7 @@ export default function AppSidebar({ onClose }: { onClose: () => void }) {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
 
-  const { user, signOut, setConsent } = useAuth();
+  const { user, consent, signOut, setConsent } = useAuth();
   const { tier, setTier } = useBilling();
   const { requestSearchDraft } = useSearchDraft();
 
@@ -265,6 +265,23 @@ export default function AppSidebar({ onClose }: { onClose: () => void }) {
               Auto-apply requirements — stored on this device only, never sent to a server.
             </p>
             <SettingsForm />
+
+            <div className="mt-4 border-t border-structure-on-canvas/15 pt-4">
+              <label className="flex cursor-pointer items-start gap-2.5 text-pretty font-body text-[13px] leading-relaxed text-foreground">
+                <input
+                  type="checkbox"
+                  checked={consent.granted}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-structure"
+                />
+                <span>Opt in to sharing anonymized usage data</span>
+              </label>
+              {consent.granted && consent.grantedAt && (
+                <p className="mt-1.5 pl-[26px] font-mono text-[11px] tabular-nums text-foreground/70">
+                  Opted in {new Date(consent.grantedAt).toLocaleString()}.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
