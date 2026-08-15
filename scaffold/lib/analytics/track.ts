@@ -52,19 +52,41 @@ function defaultSink(event: AnalyticsEvent): void {
 }
 
 /**
+ * Consent gate (§5.3 / R10.1). Analytics is PRIVATE BY DEFAULT: even with the
+ * `r10_analytics` flag on, `track()` stays inert until the visitor has opted in
+ * ("Opt in to sharing anonymized usage data"). This is a SECOND, independent
+ * gate from the flag — an event reaches the sink only when the flag is on AND
+ * consent is granted.
+ *
+ * It lives here (the framework-agnostic choke point every event passes through)
+ * rather than only in the React provider, so a future direct `track()` caller
+ * can't bypass the opt-in. `AuthProvider` — the localStorage-backed source of
+ * truth for consent — keeps this in sync via `setAnalyticsConsent()`.
+ */
+let analyticsConsent = false;
+
+/** Sync the analytics consent gate with the user's opt-in. Defaults to false. */
+export function setAnalyticsConsent(granted: boolean): void {
+  analyticsConsent = granted;
+}
+
+/**
  * Validate + (maybe) deliver a single analytics event.
  *
  * - Flag off (`r10_analytics`) → fully inert, sink is never invoked.
- * - Flag on + event fails `AnalyticsEventSchema` → silent no-op, sink is
- *   never invoked. This is the runtime backstop for description/free-text
- *   content that slipped past TypeScript (e.g. via a cast).
- * - Flag on + event valid → `sink(event)` is called (default: console.debug
- *   stub). Any error anywhere in this path is swallowed — a bad call site
- *   must never crash the app.
+ * - Consent not granted → fully inert, sink is never invoked (opt-in required,
+ *   private by default; see `setAnalyticsConsent`).
+ * - Flag on + consent granted + event fails `AnalyticsEventSchema` → silent
+ *   no-op, sink is never invoked. This is the runtime backstop for
+ *   description/free-text content that slipped past TypeScript (e.g. via a cast).
+ * - Flag on + consent granted + event valid → `sink(event)` is called (default:
+ *   console.debug stub). Any error anywhere in this path is swallowed — a bad
+ *   call site must never crash the app.
  */
 export function track(event: AnalyticsEvent, sink: AnalyticsSink = defaultSink): void {
   try {
     if (!isFlagEnabled("r10_analytics")) return;
+    if (!analyticsConsent) return; // opt-in required — private by default (§5.3)
 
     const result = AnalyticsEventSchema.safeParse(event);
     if (!result.success) return; // never reaches the sink

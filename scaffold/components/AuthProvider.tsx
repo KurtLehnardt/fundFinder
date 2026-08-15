@@ -61,6 +61,7 @@ import {
   type ConsentRecord,
 } from '@/lib/mockAuth';
 import { isFlagEnabled } from '@/lib/flags';
+import { setAnalyticsConsent } from '@/lib/analytics/track';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { mapSupabaseUser } from '@/lib/supabase/user';
 
@@ -121,6 +122,12 @@ function MockAuthProvider({ children }: { children: ReactNode }) {
     setConsentState(getConsent());
     setLoading(false);
   }, []);
+
+  // Analytics is private by default: keep the emit gate in sync with the opt-in
+  // so events only ever fire once the user has actually consented (§5.3).
+  useEffect(() => {
+    setAnalyticsConsent(consent.granted);
+  }, [consent.granted]);
 
   // Keep tabs in sync: sign out in one tab, every tab follows.
   useEffect(() => {
@@ -186,6 +193,12 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Analytics is private by default: keep the emit gate in sync with the opt-in
+  // so events only ever fire once the user has actually consented (§5.3).
+  useEffect(() => {
+    setAnalyticsConsent(consent.granted);
+  }, [consent.granted]);
 
   // Real OAuth: the browser leaves for Google and returns via /auth/callback.
   // `name` is ignored (kept for a signature-compatible drop-in).

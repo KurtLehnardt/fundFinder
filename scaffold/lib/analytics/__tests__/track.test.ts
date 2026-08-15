@@ -21,6 +21,7 @@ import {
   upgradeStarted,
   upgradeCompleted,
   runRevisited,
+  setAnalyticsConsent,
   type AnalyticsSink,
 } from "../track";
 import {
@@ -50,10 +51,15 @@ beforeEach(() => {
   // behavior is what's under test, not the flag gate itself. Tests that
   // specifically test the flag gate override this.
   process.env[R10_ENV_VAR] = "true";
+  // Analytics is private by default (consent-gated). Grant consent for the bulk
+  // of tests so the flag/validation/sink behavior is what's exercised; the
+  // consent-gating block below overrides this to assert the opt-in gate.
+  setAnalyticsConsent(true);
 });
 
 afterEach(() => {
   process.env = savedEnv;
+  setAnalyticsConsent(false); // reset the module-level consent gate between tests
 });
 
 function spy(): { calls: AnalyticsEvent[]; sink: AnalyticsSink } {
@@ -92,6 +98,46 @@ describe("track() — flag gating (r10_analytics)", () => {
     const { calls, sink } = spy();
     track(runAbandoned(4200, { results_shown: 2 }), sink);
     assert.equal(calls.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Consent gating (§5.3 / R10.1) — private by default; opt-in required
+// ---------------------------------------------------------------------------
+
+describe("track() — consent gating (opt-in required)", () => {
+  test("flag on but consent NOT granted -> fully inert, sink never called", () => {
+    // flag is ON via beforeEach; revoke consent for this case.
+    setAnalyticsConsent(false);
+    const { calls, sink } = spy();
+    track(landingView({ count: 1 }), sink);
+    assert.equal(calls.length, 0);
+  });
+
+  test("flag on + consent granted -> a valid event reaches the sink", () => {
+    setAnalyticsConsent(true);
+    const { calls, sink } = spy();
+    track(landingView({ count: 1 }), sink);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].name, "landing_view");
+  });
+
+  test("both gates required: consent granted but flag OFF -> still inert", () => {
+    delete process.env[R10_ENV_VAR];
+    setAnalyticsConsent(true);
+    const { calls, sink } = spy();
+    track(landingView({ count: 1 }), sink);
+    assert.equal(calls.length, 0);
+  });
+
+  test("revoking consent mid-session immediately stops emission", () => {
+    setAnalyticsConsent(true);
+    const { calls, sink } = spy();
+    track(landingView(), sink);
+    assert.equal(calls.length, 1);
+    setAnalyticsConsent(false);
+    track(runCompleted({ results_shown: 0 }), sink);
+    assert.equal(calls.length, 1); // no second event after opt-out
   });
 });
 
