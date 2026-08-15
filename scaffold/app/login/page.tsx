@@ -62,12 +62,12 @@ export default function LoginPage() {
   if (loading) return null; // avoids a flash of the login form on reload
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f9f9f9] px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.06)]">
-        <h1 className="text-pretty text-2xl font-semibold text-[#212121]">
+    <main className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-structure-on-canvas/15 bg-canvas-alt p-8 shadow-card">
+        <h1 className="text-pretty text-2xl font-semibold text-foreground">
           Sign in to {BRAND}
         </h1>
-        <p className="mt-2 text-pretty text-sm leading-relaxed text-[#5b616b]">
+        <p className="mt-2 text-pretty text-sm leading-relaxed text-foreground/70">
           Find federal funding your company can actually apply for.
         </p>
 
@@ -76,7 +76,7 @@ export default function LoginPage() {
             screen-reader "radio group" semantics. */}
         <fieldset className="mt-8">
           <legend className="sr-only">Choose how to sign in</legend>
-          <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#ecf1f7] p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-canvas p-1">
             <label className="cursor-pointer">
               <input
                 type="radio"
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 onChange={() => setMode('google')}
                 className="peer sr-only"
               />
-              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-[#5b616b] transition-colors duration-150 peer-checked:bg-white peer-checked:text-[#005ea2] peer-checked:shadow-[0_1px_2px_rgba(0,0,0,0.08)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#005ea2]">
+              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground/70 transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
                 Real account
               </span>
             </label>
@@ -99,7 +99,7 @@ export default function LoginPage() {
                 onChange={() => setMode('demo')}
                 className="peer sr-only"
               />
-              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-[#5b616b] transition-colors duration-150 peer-checked:bg-white peer-checked:text-[#005ea2] peer-checked:shadow-[0_1px_2px_rgba(0,0,0,0.08)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#005ea2]">
+              <span className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-foreground/70 transition-colors duration-150 peer-checked:bg-canvas-alt peer-checked:text-structure-on-canvas peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-structure-on-canvas">
                 Judge demo
               </span>
             </label>
@@ -110,7 +110,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleContinue}
-            className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg border border-[#d0d7de] bg-white px-4 py-3 text-sm font-medium text-[#212121] transition-colors duration-150 hover:bg-[#f3f6fa] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#005ea2] focus-visible:ring-offset-2"
+            className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg border border-structure-on-canvas/25 bg-canvas-alt px-4 py-3 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-canvas focus:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
           >
             <GoogleMark />
             Continue with Google
@@ -119,13 +119,13 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleContinue}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#538200] px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#466d00] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#005ea2] focus-visible:ring-offset-2"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-action px-4 py-3 text-sm font-semibold text-token-white transition-colors duration-150 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
           >
             Enter demo mode — hackathon judge
           </button>
         )}
 
-        <p className="mt-4 text-center text-xs leading-relaxed text-[#5b616b]">
+        <p className="mt-4 text-center text-xs leading-relaxed text-foreground/70">
           {mode === 'google'
             ? realAuth
               ? 'Sign in with your real Google account.'
