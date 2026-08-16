@@ -515,7 +515,28 @@ export default function OpportunityCard({
           />
         ))}
 
-      {competitorOpen && <CompetitorAnalysisModal onClose={() => setCompetitorOpen(false)} />}
+      {competitorOpen && (
+        <CompetitorAnalysisModal
+          onClose={() => setCompetitorOpen(false)}
+          // R5-deep: thread the founder's profile + this opportunity so a Max-tier
+          // user (with the r5_deep_analysis flag on) can run a live, personalized
+          // brief. Absent profile → the modal stays demo-only. Keywords prefer the
+          // gov-vocabulary expandedTerms the retrieval is tuned for.
+          profile={
+            startupProfile
+              ? {
+                  description: startupProfile.description,
+                  keywords:
+                    startupProfile.expandedTerms && startupProfile.expandedTerms.length
+                      ? startupProfile.expandedTerms
+                      : startupProfile.naicsGuesses,
+                  persona: startupProfile.industry,
+                }
+              : undefined
+          }
+          opportunity={{ program: o.program, agency: o.agency }}
+        />
+      )}
 
       {open && (
         <div className={detailsClass}>
@@ -587,10 +608,18 @@ export default function OpportunityCard({
                   Analyze competing companies
                 </button>
                 <span className={competitorHintClass}>
-                  {/* Same honesty fix as Auto Apply: the competitor stub opens
-                      the "not live yet" upsell modal, so an unlocked tier must
-                      not claim the analysis is usable. */}
-                  {competitorUnlocked ? <>In your plan &middot; not live yet</> : <>Pro feature &middot; not available yet</>}
+                  {/* Honest hint: with r5_deep_analysis ON, an unlocked (Max) tier
+                      really can run a live brief; with it OFF the surface is the
+                      saved example only. Locked tiers can still preview the example. */}
+                  {competitorUnlocked ? (
+                    isFlagEnabled("r5_deep_analysis") ? (
+                      <>In your plan &middot; live</>
+                    ) : (
+                      <>In your plan &middot; example</>
+                    )
+                  ) : (
+                    <>Max feature &middot; preview available</>
+                  )}
                 </span>
               </div>
 

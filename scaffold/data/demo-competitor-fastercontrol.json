@@ -1,7 +1,7 @@
 {
   "persona": "FasterControl",
   "personaDescription": "FasterControl is a Utah company building cloud-based quality management (QMS) and manufacturing execution (MES) software for regulated life-sciences and manufacturing customers. The platform handles electronic batch records, digital quality management, deviation and CAPA workflows, and shop-floor manufacturing execution for companies that must meet FDA and ISO quality requirements.",
-  "capturedAt": "2026-08-15T18:35:24.229Z",
+  "capturedAt": "2026-08-16T16:15:02.523Z",
   "records": [
     {
       "id": "usa_1",
@@ -12,7 +12,7 @@
       "program": "Award EP135000141",
       "abstract": "PROCUREMENT OF QUALITY MANAGEMENT SYSTEM SOFTWARE FOR THE US EPA REGION 5 CHICAGO REGIONAL LABORATORY (CRL). THE SYSTEM WILL SUPPORT THE CRLS ISO/IEC 17025:2005 ACCREDITATION INCLUDING MEETING REQUIREMENTS OF THE LABORATORY ACCREDITATION BUREAU (L-A-B) FORENSIC SCIENCE ACCREDITATION PROGRAM (FSAP) BASE ON ILAC G19:2002 BY MANAGING QUALITY THROUGH DOCUMENT CONTROL AND WORKFLOWS. ALL CRL STAFF WILL BE TRAINED IN THE USE OF THIS SOFTWARE, BUT THE PRIMARY USERS WILL BE CRL MANAGEMENT. IGF::OT::IGF",
       "sourceUrl": "https://www.usaspending.gov/award/CONT_AWD_EP135000141_6800_-NONE-_-NONE-",
-      "similarity": 0.5537
+      "similarity": 0.5536
     },
     {
       "id": "nsf_2",
@@ -95,74 +95,159 @@
       "similarity": 0.3906
     }
   ],
+  "webProfiles": [
+    {
+      "id": "web_1",
+      "company": "SimplerQMS",
+      "sourceUrl": "https://simplerqms.com/",
+      "snippet": "Cloud-based life-science quality management software (eQMS) supporting GxP, ISO 13485:2016, FDA 21 CFR Part 820 and Part 11, EU GMP Annex 11, EU MDR and IVDR. Founded 2017, Copenhagen.",
+      "via": "exa"
+    },
+    {
+      "id": "web_2",
+      "company": "Cloudtheapp",
+      "sourceUrl": "https://cloudtheapp.com/",
+      "snippet": "AI-powered, fully validated, no-code eQMS for pharma, life sciences, medical device and manufacturing — 45+ apps (CAPA, document control, batch records, deviations) on one audit-ready platform, shipping FDA CSV validation packages. Founded 2018, Texas.",
+      "via": "exa"
+    },
+    {
+      "id": "web_3",
+      "company": "SG Systems Global",
+      "sourceUrl": "https://sgsystemsglobal.com/",
+      "snippet": "Integrated MES, QMS and WMS software for regulated process manufacturing — batch execution, electronic batch records (21 CFR Part 11), in-line quality control / SPC, and CAPA / NCR management, connected to ERP and plant equipment. Founded 2006, Dallas.",
+      "via": "exa"
+    },
+    {
+      "id": "web_4",
+      "company": "Litewave AI",
+      "sourceUrl": "https://litewave.ai/",
+      "snippet": "AI-native industrial operating system for regulated manufacturing — digitizes batch records, quality documents and plant systems (MES, LIMS, QMS) for GxP environments aligned with 21 CFR Part 11 and EU Annex 11.",
+      "via": "exa"
+    }
+  ],
+  "awardStats": {
+    "count": 8,
+    "withAmount": 8,
+    "minAmount": 71084,
+    "medianAmount": 593769,
+    "maxAmount": 124376878.75
+  },
   "analysis": {
-    "summary": "Federal funding in the quality management and manufacturing execution space is concentrated in large enterprise IT contracts, academic research on manufacturing trustworthiness, and biomanufacturing process analytics — with limited direct awards to commercial QMS/MES SaaS vendors beyond niche laboratory-compliance software.",
+    "summary": "Federal awards in this space are dominated by large MES/QMS procurement contracts (Treasury/BEP via Deloitte and Oracle), a small number of ISO/QMS software procurements at EPA lab level, and FDA/NIH-funded biomanufacturing research grants focused on process analytics and continuous manufacturing — leaving a visible gap for a dedicated cloud QMS/MES vendor targeting mid-tier regulated manufacturers and federal lab quality programs.",
     "competitors": [
       {
         "recordId": "usa_1",
-        "positioning": "Qualtrax positioned itself as a purpose-built QMS software for laboratory accreditation compliance, winning EPA business by tightly aligning their document control and workflow capabilities to specific ISO/IEC 17025 and forensic accreditation standards, making the compliance requirement itself the sales narrative.",
+        "positioning": "Qualtrax positioned itself as a specialist QMS software provider directly addressing laboratory accreditation compliance (ISO/IEC 17025, ILAC G19) with document control and workflow capabilities, winning a direct EPA procurement by aligning its product to the agency's specific accreditation audit requirements rather than pitching a broad platform.",
         "quotedSnippet": "THE SYSTEM WILL SUPPORT THE CRLS ISO/IEC 17025:2005 ACCREDITATION INCLUDING MEETING REQUIREMENTS OF THE LABORATORY ACCREDITATION BUREAU (L-A-B) FORENSIC SCIENCE ACCREDITATION PROGRAM (FSAP) BASE ON ILAC G19:2002 BY MANAGING QUALITY THROUGH DOCUMENT CONTROL AND WORKFLOWS."
       },
       {
         "recordId": "usa_3",
-        "positioning": "Deloitte Consulting won a massive MES support contract at the Bureau of Engraving and Printing by positioning as a large-scale systems integrator capable of managing complex, mission-critical manufacturing execution infrastructure for a federal agency — a positioning entirely dependent on scale, incumbency, and existing federal relationships rather than product differentiation.",
+        "positioning": "Deloitte Consulting captured a massive Treasury/Bureau of Engraving and Printing MES contract by positioning as a large-scale systems integrator capable of delivering and sustaining mission-critical manufacturing execution infrastructure for a high-security federal manufacturing facility, competing on integration depth and enterprise support rather than product specialization.",
         "quotedSnippet": "BEP MANUFACTURING EXECUTION SYSTEM(MES) SUPPORT SERVICES CYRBYME-NA"
       },
       {
         "recordId": "usa_5",
-        "positioning": "Dynamic Systems Inc. secured a Treasury MES renewal contract by embedding itself as the incumbent support and licensing intermediary for Oracle-based MES infrastructure, demonstrating that installed-base lock-in and renewal cycles are a key procurement pathway in federal MES.",
+        "positioning": "Dynamic Systems Inc. won a Treasury MES renewal by leveraging an incumbent Oracle software licensing relationship, positioning around continuity of existing systems (MES, FlowSys, in-house systems) and maintenance support rather than new capability — a lock-in strategy common in federal IT renewals.",
         "quotedSnippet": "ORACLE SOFTWARE LICENSES RENEWAL AND MAINTENANCE SUPPORT REQUIRED TO OBTAIN UPDATES AND SUPPORT FOR MULTIPLE SYSTEMS SUCH AS MANUFACTURING EXECUTION SYSTEM (MES), FLOWSYS, AND OTHER IN-HOUSE DEVELOPED SYSTEMS."
       },
       {
-        "recordId": "nih_8",
-        "positioning": "Physical Sciences Inc. positioned around real-time in-line process analytical technology (PAT) for biomanufacturing, emphasizing regulatory-relevant process understanding and control for viral vector production — adjacent to QMS/MES by framing monitoring and control as prerequisites for GMP compliance.",
-        "quotedSnippet": "To develop efficient and reliable biomanufacturing processes, it is crucial to have a solid understanding of bioprocess dynamics which requires advanced analytical technologies that can deliver precise and timely information on key bioprocess parameters and quality attributes."
+        "recordId": "nih_4",
+        "positioning": "University of Delaware won FDA funding by framing its continuous biomanufacturing research around critical quality attributes (CQAs), critical process parameters (CPPs), and design space optimization for monoclonal antibody production — language and priorities that directly mirror FDA's advanced manufacturing and process analytical technology (PAT) agenda.",
+        "quotedSnippet": "To enable process control, which is the ultimate target of advanced manufacturing, we will explore the design space and identify the relationships between critical process parameters (CPPs), critical material attributes (CMAs), and targeted CQAs."
       },
       {
-        "recordId": "nih_4",
-        "positioning": "University of Delaware positioned continuous biomanufacturing research around process control, critical quality attributes (CQAs), and critical process parameters (CPPs) — the exact vocabulary of FDA process validation and QMS frameworks — making their academic work directly relevant to regulated life-sciences manufacturing buyers.",
-        "quotedSnippet": "To enable process control, which is the ultimate target of advanced manufacturing, we will explore the design space and identify the relationships between critical process parameters (CPPs), critical material attributes (CMAs), and targeted CQAs."
+        "recordId": "nih_8",
+        "positioning": "Physical Sciences Inc. won NIH Phase II SBIR funding by positioning its bioreactor process analytics tool as solving a specific, high-priority gap in gene therapy manufacturing — real-time intra-cellular metabolite monitoring — and by coupling a novel sensor technology with a clear commercial pathway validated across multiple university partners.",
+        "quotedSnippet": "Ineffective process monitoring and control protocols during viral production can cause many manufacturing issues, including cell instability, high impurity levels, scalability challenges, and reduced productivity."
+      },
+      {
+        "recordId": "nsf_2",
+        "positioning": "University of Nebraska-Lincoln won NSF funding by framing manufacturing data integrity as a cybersecurity and resilience challenge — coupling physical process monitoring with cyber-threat detection — positioning trustworthy manufacturing systems as foundational infrastructure for next-generation intelligent manufacturing adoption.",
+        "quotedSnippet": "If process measurements are compromised by cyberattacks, equipment failures, or sensing errors, manufacturers may unknowingly make incorrect decisions that reduce product quality, increase waste, disrupt production, and create safety risks."
       }
     ],
     "recommendations": [
       {
-        "advice": "Target federal laboratory and agency QMS compliance contracts by explicitly mapping FasterControl's document control and workflow capabilities to specific accreditation standards (e.g., ISO/IEC 17025, ISO 13485, 21 CFR Part 11). Qualtrax won EPA business at a modest $71K by being the most credible compliance-specific vendor — FasterControl should pursue similar sole-source or small-purchase opportunities at FDA, CDC, NIH labs, and EPA regional laboratories where the accreditation mandate drives procurement rather than price alone.",
+        "advice": "Target EPA regional laboratories and federal analytical labs with an ISO/IEC 17025-aligned QMS offering. Qualtrax won a direct EPA procurement specifically by addressing document control and workflow requirements for laboratory accreditation — FasterControl should explicitly map its QMS modules (deviation management, document control, CAPA) to ISO/IEC 17025 and ILAC accreditation language in any federal procurement response or GSA Schedule listing to compete on the same terms.",
         "citations": [
           "usa_1"
         ]
       },
       {
-        "advice": "Position FasterControl's electronic batch records and deviation/CAPA workflows as enabling infrastructure for the PAT and continuous biomanufacturing initiatives being funded by FDA and NIH. Biomanufacturing researchers and eventual commercial scalers need QMS/MES platforms to operationalize GMP compliance around CQAs and CPPs — FasterControl should publish case studies and partner with university or biotech commercialization offices running FDA-funded programs to get embedded early.",
+        "advice": "Pursue FDA SBIR/STTR funding by framing FasterControl's electronic batch records and MES capabilities as enabling FDA's Process Analytical Technology (PAT) and Pharmaceutical Quality by Design (QbD) agenda for continuous biomanufacturing. NIH/FDA-funded awardees consistently win by connecting their platform to CQA/CPP monitoring and design space documentation — FasterControl should propose a Phase I SBIR around digitizing and automating the CPP-to-CQA traceability workflow in a specific biologics or gene therapy manufacturing context.",
         "citations": [
           "nih_4",
           "nih_8"
         ]
       },
       {
-        "advice": "Develop a federal MES/QMS SaaS narrative that explicitly addresses cybersecurity and data integrity for shop-floor systems, as NSF is funding research on trustworthy manufacturing and data integrity in process monitoring. Framing FasterControl's platform as supporting audit-ready, tamper-evident electronic records that address data integrity risks (not just quality compliance) could differentiate against incumbent Oracle-based systems and align with emerging federal procurement priorities.",
-        "citations": [
-          "nsf_2",
-          "usa_5"
-        ]
-      },
-      {
-        "advice": "To compete for larger federal MES opportunities similar to the $124M Deloitte contract or the $4.6M Oracle renewal at Treasury, FasterControl would need a teaming or channel strategy — partnering with a federal systems integrator as the software provider while the integrator handles the prime contract vehicle. Direct pursuit of contracts at Deloitte's scale is not realistic as an independent SaaS vendor, but positioning as the modern cloud-native QMS/MES layer within an integrator's stack is a viable wedge. Note: evidence for this pathway is indirect and thin from the available records.",
+        "advice": "Differentiate from incumbent Oracle/Deloitte MES deployments at federal manufacturing agencies (Treasury/BEP) by positioning as a modern, cloud-native, lower-total-cost alternative for agencies facing Oracle renewal decisions. The Dynamic Systems Oracle renewal and Deloitte MES contract show these agencies are paying large sums for legacy system maintenance — FasterControl should develop a federal migration narrative emphasizing reduction of license and support costs and 21 CFR Part 11 compliance built-in, and pursue market research meetings with BEP and DoD manufacturing facilities.",
         "citations": [
           "usa_3",
           "usa_5"
         ]
       },
       {
-        "advice": "Pursue SBIR/STTR Phase I and II opportunities with FDA or NIH by proposing a cloud-native, AI-assisted QMS/MES tool for small and mid-size biomanufacturers producing cell therapies, gene therapies, or monoclonal antibodies. The NIH and FDA are funding infrastructure for continuous biomanufacturing process control; a commercial software platform that bridges digital quality records with process analytical data would address a genuine gap. Physical Sciences Inc.'s $1M Phase II award demonstrates this funding pathway is active for biomanufacturing tooling.",
+        "advice": "Incorporate a data integrity and manufacturing trustworthiness positioning angle — explicitly addressing how FasterControl's audit trails, electronic batch records, and deviation workflows protect against data integrity failures — to align with NSF and DoD advanced manufacturing program priorities. NSF is funding research on exactly this problem; FasterControl could position its commercial platform as the operational complement to that research, making it a compelling industry partner for university SBIR/STTR collaboration awards.",
         "citations": [
+          "nsf_2",
+          "nsf_7"
+        ]
+      },
+      {
+        "advice": "Benchmark and differentiate against private cloud QMS competitors (SimplerQMS, Cloudtheapp, SG Systems Global) by emphasizing the combined QMS+MES integration — electronic batch records tied directly to deviation and CAPA workflows in a single platform — since SimplerQMS covers only QMS, Cloudtheapp leads with no-code eQMS apps, and SG Systems is a legacy on-premise-oriented vendor. In federal procurement language, position this integration as reducing system-of-record fragmentation and audit risk for regulated federal manufacturers.",
+        "citations": [
+          "web_1",
+          "web_2",
+          "web_3"
+        ]
+      }
+    ],
+    "opportunities": [
+      {
+        "advice": "There is a clear whitespace in EPA regional and federal laboratory QMS procurement: the only awarded QMS software contract in these records is a single $71K EPA Region 5 purchase from Qualtrax. FasterControl could pursue other EPA regions, FDA field laboratories, USDA labs, and CDC facilities that hold ISO/IEC 17025 or GLP accreditations and require the same document control and deviation workflow capabilities — this is a repeatable, small-contract entry point that avoids competition with large system integrators.",
+        "citations": [
+          "usa_1"
+        ]
+      },
+      {
+        "advice": "No awardee in these records offers an integrated cloud MES + QMS platform as a commercial SaaS product to mid-tier federal biomanufacturers or DoD-adjacent manufacturers — the MES awards are either Oracle license renewals or Deloitte large-scale integrations. FasterControl could target BARDA, DoD MCDC, and the emerging domestic biologics manufacturing base (driven by medical countermeasure policy) as customers needing a validated, 21 CFR Part 11-compliant MES/QMS platform that can be deployed faster and at lower cost than an Oracle or SAP stack.",
+        "citations": [
+          "usa_3",
+          "usa_5",
+          "web_3"
+        ]
+      },
+      {
+        "advice": "NSF's funding of manufacturing data trustworthiness and run-to-run quality certification research reveals an unmet need for a commercial platform that operationalizes these research outputs — real-time process integrity checks, audit-ready quality records, and knowledge-guided deviation detection. FasterControl could position itself as the commercial translation layer for this NSF-funded research, either as an industry partner on future awards or by developing marketing language around 'trustworthy manufacturing execution' that resonates with NSF, NIST MEP, and DoD manufacturing program officers.",
+        "citations": [
+          "nsf_2",
+          "nsf_7"
+        ]
+      },
+      {
+        "advice": "The FDA and NIH are actively funding continuous biomanufacturing infrastructure for biologics and gene therapy, but no awarded record reflects a commercial QMS/MES software vendor winning in this space — the awards go to universities and instrumentation companies. FasterControl could fill this gap by developing a purpose-built electronic batch record and deviation management module for continuous manufacturing processes (as opposed to traditional batch), and positioning it in an SBIR proposal to FDA CDER or CBER, or as a tool for NIH-funded biomanufacturing centers.",
+        "citations": [
+          "nih_4",
           "nih_8",
-          "nih_4"
+          "web_4"
         ]
       }
     ]
   },
+  "mode": "demo",
+  "degraded": {
+    "sources": [
+      "USAspending",
+      "NIH RePORTER",
+      "NSF"
+    ],
+    "notes": [
+      "Included 4 supplied web competitor profile(s)."
+    ]
+  },
   "cost": {
-    "totalCostUsd": 0.0338,
+    "totalCostUsd": 0.048,
     "pricingAsOf": "2026-08-15"
   }
 }

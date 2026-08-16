@@ -42,7 +42,8 @@ export type FlagName =
   | "c1b_type_groups"
   | "d4_opportunity_graph"
   | "d3_funding_strategy"
-  | "d5_alerts";
+  | "d5_alerts"
+  | "r5_deep_analysis";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -205,5 +206,15 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "(new matches, tier upgrades, newly closing-soon) against the founder's last saved run " +
       "for the same profile. Never sent to a server (§5.3).",
     envVar: "NEXT_PUBLIC_FLAG_D5_ALERTS",
+  },
+  r5_deep_analysis: {
+    name: "r5_deep_analysis",
+    requirement: "R5",
+    description:
+      "Live, personalized competitor & grant-intelligence market brief (POST /api/competitors): " +
+      "real federal awardees + how they positioned, typical award sizes, cited positioning " +
+      "recommendations, and gaps to exploit — Max-tier gated, with a demo-fixture fallback. " +
+      "Default OFF; the canned demo-first surface stays the default until this ships.",
+    envVar: "NEXT_PUBLIC_FLAG_R5_DEEP_ANALYSIS",
   },
 };
