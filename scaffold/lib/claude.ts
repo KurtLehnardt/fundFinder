@@ -188,10 +188,10 @@ export async function explainMatches(
   meter?: CostMeter,
   onBatch?: (doneCandidates: number, totalCandidates: number) => void,
   signal?: AbortSignal,
-): Promise<Array<{ id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string }>> {
+): Promise<Array<{ id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyCare: string; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string }>> {
   const SYSTEM = loadPrompt("explainMatches").template;
 
-  type Assessment = { id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string };
+  type Assessment = { id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyCare: string; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string };
 
   // Score in parallel batches. A single serial call over all candidates emits
   // ~700-900 output tokens each and dominates request latency (~3 min for 24

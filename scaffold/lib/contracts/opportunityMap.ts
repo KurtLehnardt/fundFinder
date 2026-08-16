@@ -15,17 +15,17 @@ import { EligibilityDeterminationSchema } from "./eligibilityDetermination";
  *      and `SearchCostDebugSchema` below). Optional keeps cached/precomputed
  *      maps, which lack both, still validating (CON-01's "additive, must not
  *      break the cached responses").
- *   2. The four narrative `Match` strings (`whyFit`, `whyIneligible`,
- *      `whatToVerify`, `whatToDoNext`) were `z.string()` (required), but
- *      `lib/match.ts` assigns them straight from an unvalidated LLM JSON
- *      response (`parseJson()` in `lib/claude.ts` is a raw `JSON.parse` +
- *      cast — no zod backstop), so any of the four can legitimately be
- *      `undefined` on a real map (e.g. a clear-fit match the model judged to
- *      have nothing "ineligible" to report). Reproduced directly against
- *      `MatchSchema`: all four fail identically when omitted. They are
- *      display strings, not eligibility gates, so they now `.default("")`
- *      instead of being required — present-as-string for consumers, but no
- *      longer a validation failure on a real live map.
+ *   2. The narrative `Match` strings (`whyFit`, `whyIneligible`,
+ *      `whatToVerify`, `whatToDoNext`, and — as of C2 — `whyCare`) were
+ *      `z.string()` (required), but `lib/match.ts` assigns them straight from
+ *      an unvalidated LLM JSON response (`parseJson()` in `lib/claude.ts` is a
+ *      raw `JSON.parse` + cast — no zod backstop), so any of them can
+ *      legitimately be `undefined` on a real map (e.g. a clear-fit match the
+ *      model judged to have nothing "ineligible" to report). Reproduced
+ *      directly against `MatchSchema`: all fail identically when omitted.
+ *      They are display strings, not eligibility gates, so they now
+ *      `.default("")` instead of being required — present-as-string for
+ *      consumers, but no longer a validation failure on a real live map.
  *
  * Why `version` is optional, not defaulted-to-required: the cached responses in
  * `data/precomputed.json` have no `version` field, and `lib/match.ts` returns
@@ -138,6 +138,13 @@ export const MatchSchema = z.object({
   // string safely) without making a live map fail boundary validation. These
   // are NOT eligibility gates — `eligibility` below is the sole gated field,
   // and its schema keeps every anti-fabrication refinement intact.
+  // C2 — distinct from whyFit: for a grant/rd candidate this is "why you may
+  // fit"; for a procurement/adjacent candidate it's "why this matters to
+  // you" (government-as-customer strategic value). See the `explainMatches`
+  // v2 prompt (lib/prompts/registry.ts) rule 2. Same `.default("")` treatment
+  // as the other narrative strings: not schema-validated at the LLM boundary,
+  // additive-optional so cached/precomputed maps predating C2 still validate.
+  whyCare: z.string().default(""),
   whyFit: z.string().default(""),
   whyIneligible: z.string().default(""),
   whatToVerify: z.string().default(""),

@@ -67,6 +67,7 @@ function assess(id: string, score = 80) {
     score,
     tier: "likely" as const,
     criteria: [],
+    whyCare: "This program funds exactly the sensing R&D you're doing.",
     whyFit: "Strong technical alignment.",
     whyIneligible: "Confirm your entity type and registration.",
     whatToVerify: "SAM registration.",

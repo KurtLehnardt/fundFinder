@@ -37,6 +37,7 @@ export const fixtureMap = {
       tier: "likely",
       score: 82,
       criteria: [{ label: "Health IT focus", met: true }],
+      whyCare: "This program funds exactly the rural-clinic AI diagnostics work you're building.",
       whyFit: "Directly funds AI diagnostics for rural clinics.",
       whyIneligible: "Confirm your entity type and SAM.gov registration.",
       whatToVerify: "SAM.gov registration and UEI.",

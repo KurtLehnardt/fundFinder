@@ -209,6 +209,7 @@ export async function buildOpportunityMap(
         tier: tierFromScore(a.score),
         score: a.score,
         criteria: a.criteria ?? [],
+        whyCare: a.whyCare,
         whyFit: a.whyFit,
         whyIneligible: a.whyIneligible,
         whatToVerify: a.whatToVerify,
