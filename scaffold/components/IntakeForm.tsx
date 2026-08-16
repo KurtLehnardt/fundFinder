@@ -10,6 +10,7 @@ import { BRAND } from "@/lib/brand";
 import Swal from "sweetalert2";
 import SearchProgress from "@/components/SearchProgress";
 import PreSearchInterview from "@/components/PreSearchInterview";
+import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
 // Type-only: generateQuestions.ts imports the OpenAI SDK at runtime. A
 // type-only import is erased at compile time, so no server-only runtime
 // (or the OPENAI_API_KEY it reads) ever reaches this client bundle.
@@ -50,14 +51,11 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
   const sidebar = isFlagEnabled("left_sidebar");
 
   // FE-07: the drawer's "Use this" (on a saved company-description version)
-  // pushes text into this search box via SearchDraftProvider. Keyed on the
-  // nonce so loading the same text twice still fires. No-op flag-off (nothing
-  // ever calls requestSearchDraft then).
+  // pushes text into ProfileQuestionnaire's description field via
+  // SearchDraftProvider — passed straight through as externalText/
+  // externalNonce below (B1b). No-op flag-off (nothing ever calls
+  // requestSearchDraft then).
   const { pending } = useSearchDraft();
-  useEffect(() => {
-    if (pending) setText(pending.text);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending?.nonce]);
 
   // R1 (FE-03): pre-search interview. Off (default) = today's behavior
   // EXACTLY — beginSearch() below short-circuits straight to run(), and
@@ -291,6 +289,23 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     run(originalDescription);
   }
 
+  // B1b — ProfileQuestionnaire is the primary intake now. `complete` is true
+  // iff every one of the 13 B1a fields (required + material) is provided:
+  // when it is, we call run() directly and skip beginSearch()'s R1-interview
+  // branch entirely — the "a fully-filled form runs with ZERO interview
+  // questions" guarantee is structural, not just a side effect of the
+  // description being long enough to trip the existing word-count heuristic.
+  // A still-partial submission (required fields only) goes through
+  // beginSearch() exactly as free-text always has, so the flag-gated R1
+  // interview can still ask about whatever's left.
+  function handleQuestionnaireSubmit(description: string, meta: { complete: boolean }) {
+    if (meta.complete) {
+      run(description);
+    } else {
+      beginSearch(description);
+    }
+  }
+
   // FE-02 (R7.1): picking a sample goes straight to run() (streaming,
   // SearchProgress, caching — all untouched/wired identically), bypassing
   // the R1 pre-search interview even when that flag is on: samples are
@@ -319,24 +334,6 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
     setSamplesOpen(false);
     run(tc.text);
   }
-
-  const labelClass = design
-    ? "block mb-3 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
-    : "eyebrow block mb-3";
-
-  // Borders are the "structure" role per R7.2 (navy carries links/secondary
-  // buttons/borders); card fill uses canvas-alt, the 60% "card fills" token.
-  const textareaClass = design
-    ? "w-full resize-none rounded-sm border border-structure-on-canvas bg-canvas-alt p-4 font-body text-[15px] leading-relaxed text-foreground outline-none focus:border-structure-on-canvas focus:ring-2 focus:ring-structure-on-canvas"
-    : "w-full resize-none rounded-sm border border-rule bg-white p-4 font-body text-[15px] leading-relaxed outline-none focus:border-federal focus:ring-2 focus:ring-federal/15";
-
-  // The ONLY green surface in the whole app: primary CTA fill (R7.2's 10%).
-  // Polish: soft elevation, lift on hover, and a subtle scale-on-press for
-  // tactile feedback (transition covers transform/shadow/opacity; the global
-  // reduced-motion rule neutralizes the motion).
-  const primaryButtonClass = design
-    ? "min-h-[44px] rounded-sm bg-action px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-token-white shadow-sm transition hover:opacity-90 hover:shadow active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
-    : "min-h-[44px] rounded-sm bg-ink px-5 py-2.5 font-mono text-[12px] uppercase tracking-eyebrow text-paper transition hover:bg-federal disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
   // FE-02 (R7.1): the sample-company picker lives below a real visual break
   // (border-t + vertical space), not inline with the CTA. It's a secondary
@@ -394,17 +391,26 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
 
   return (
     <div>
-      <label htmlFor="co" className={labelClass}>Tell us about your company</label>
-      <textarea
-        id="co"
-        data-tour="describe"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={5}
-        placeholder="Please enter at least three sentences to get accurate results — what you build, who it's for, your size, revenue, what you've raised, and how much you need."
-        className={textareaClass}
-        disabled={interviewPhase !== "idle"}
-      />
+      {/* B1b — ProfileQuestionnaire is the primary intake: a structured form
+          driven by the B1a field metadata (required first, optional-material
+          fields progressively disclosed), with free-text paste-to-autofill
+          still available inside it. Hidden while an R1 interview phase is
+          active so it never competes with PreSearchInterview's own UI;
+          `disabled` covers the case where a search is already in flight
+          (`loading`) while still idle, e.g. right after
+          handleInterviewComplete() resets the phase and calls run(). */}
+      {interviewPhase === "idle" && (
+        <div data-tour="describe">
+          <ProfileQuestionnaire
+            disabled={loading}
+            externalText={pending?.text}
+            externalNonce={pending?.nonce}
+            onDescriptionChange={setText}
+            onSubmit={handleQuestionnaireSubmit}
+            design={design}
+          />
+        </div>
+      )}
 
       {mockAuthOn && (
         <div className="mt-3 rounded-r-sm border-l-2 border-structure-on-canvas bg-canvas-alt px-4 py-3">
@@ -437,18 +443,6 @@ export default function IntakeForm({ onResult }: { onResult: (m: any) => void })
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {interviewPhase === "idle" && (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => beginSearch(text)}
-            disabled={loading || text.trim().length < 20}
-            className={primaryButtonClass}
-          >
-            {loading ? "Searching…" : "Find opportunities"}
-          </button>
         </div>
       )}
 
