@@ -176,6 +176,14 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
     ? "mt-3 inline-block font-mono text-[12px] text-structure-on-canvas underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
     : "mt-3 inline-block font-mono text-[12px] text-federal underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-2";
 
+  // A3-lite — recipient company cells link out to the row's verified
+  // SBIR.gov sourceUrl. Same underline affordance as `linkClass` but sized
+  // for the table's font-mono text-[11px] context (no `mt-3 inline-block`
+  // block spacing, which is meant for a standalone link below a paragraph).
+  const recipientLinkClass = design
+    ? "underline underline-offset-2 hover:text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-1"
+    : "underline underline-offset-2 hover:text-federal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-offset-1";
+
   // Header toggle — the card's whole title row is one full-width <button>;
   // no existing dual-class const covered it before, so the focus ring is
   // added inline here, keyed off the same `design` flag as everything else.
@@ -400,7 +408,15 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
                   <tbody>
                     {m.history.recipients.map((r, i) => (
                       <tr key={i} className={tableBodyRowClass}>
-                        <td className="py-1.5 pr-3">{r.company}</td>
+                        <td className="py-1.5 pr-3">
+                          {/* A3-lite: every recipient is provenance-gated (see
+                              historyFromRows() in lib/match.ts) — link straight
+                              to the real SBIR.gov awards record so the source
+                              is one click away, not just implied. */}
+                          <a href={r.sourceUrl} target="_blank" rel="noreferrer" className={recipientLinkClass}>
+                            {r.company}
+                          </a>
+                        </td>
                         <td className={tableMutedCellClass}>{r.program}</td>
                         <td className={tableMutedCellClass}>{r.agency}</td>
                         <td className="py-1.5 pr-3 text-right">{money(r.amount)}</td>

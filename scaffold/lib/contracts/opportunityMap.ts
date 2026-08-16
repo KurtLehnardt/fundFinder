@@ -83,6 +83,25 @@ export const AwardHistorySchema = z.object({
   medianAward: z.number(),
   inState: z.number(),
   inVertical: z.number(),
+  /**
+   * A3-lite (provenance gate) — `sourceUrl` is a real SBIR.gov awards link
+   * (`https://www.sbir.gov/awards?firm=<firm>`) proving this specific award
+   * was cross-checked against the live SBIR bulk award CSV
+   * (`data.www.sbir.gov/mod_awarddatapublic_no_abstract/...`). Every row
+   * written to `data/awards.json` now carries one — unverifiable rows were
+   * dropped from the data file entirely rather than kept without it.
+   *
+   * OPTIONAL here, not required: same CON-01 "additive, must not break the
+   * cached responses" reasoning as `version`/`eligibility`/`costDebug` above
+   * — `data/precomputed.json`'s cached maps predate this field and must keep
+   * validating unchanged (that file is out of scope for this change). The
+   * actual suppression guarantee does NOT live in this schema being strict;
+   * it lives in `historyFromRows()` (`lib/match.ts`), which FILTERS rows to
+   * only those with a non-empty `sourceUrl` before a recipient ever reaches
+   * this shape — an unverifiable company is filtered out upstream, long
+   * before validation, so it can never reach a live map regardless of what
+   * this field's optionality allows through for old cached data.
+   */
   recipients: z.array(
     z.object({
       company: z.string(),
@@ -90,6 +109,7 @@ export const AwardHistorySchema = z.object({
       agency: z.string(),
       amount: z.number(),
       year: z.number(),
+      sourceUrl: z.string().optional(),
     }),
   ),
 });
