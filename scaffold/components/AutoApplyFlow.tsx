@@ -12,7 +12,9 @@ import { useBilling } from "@/components/BillingProvider";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import { useEntitlements } from "@/lib/entitlements/useEntitlements";
 import ApplicationChecklist, { REQUIREMENTS, type RequirementKey } from "@/components/ApplicationChecklist";
+import ApplicationPackage from "@/components/ApplicationPackage";
 import type { Opportunity } from "@/lib/types";
+import type { CompanyProfile } from "@/lib/contracts/companyProfile";
 
 /**
  * R6 / D6 — assisted-apply Application Assistant (behind the default-off
@@ -70,11 +72,17 @@ const STEP_ORDER: Step[] = ["signin", "requirements", "review"];
 export default function AutoApplyFlow({
   onClose,
   opportunity,
+  profile,
 }: {
   onClose: () => void;
   /** D6: the selected opportunity to build a per-opportunity checklist for.
    *  Optional — omit for the pre-D6 generic registration-only flow. */
   opportunity?: Opportunity;
+  /** G5: the founder's §3.1 CompanyProfile. When BOTH this and `opportunity` are
+   *  present, a "Draft my application" action assembles the submission-ready
+   *  package (components/ApplicationPackage.tsx). Absent → the pre-G5 flow is
+   *  unchanged; an absent profile is never fabricated. */
+  profile?: CompanyProfile;
 }) {
   // Design revamp: USWDS 60/30/10 restyle is the DEFAULT on this A/B branch
   // (previously gated behind r7_design).
@@ -94,6 +102,14 @@ export default function AutoApplyFlow({
   const [step, setStep] = useState<Step>(user ? "requirements" : "signin");
   const [form, setForm] = useState<AutoApplyRequirements>(() => getAutoApplyRequirements());
   const [saved, setSaved] = useState(false);
+
+  // G5: "Draft my application" is offered only when we have BOTH the selected
+  // opportunity and the founder's CompanyProfile. When shown, the assembled
+  // package renders INSIDE this same dialog (replacing the stepper body) so
+  // there is only ever one focus-trap / aria-modal over the document — the same
+  // single-dialog rule the header note documents for Settings.
+  const canDraft = Boolean(opportunity && profile);
+  const [showPackage, setShowPackage] = useState(false);
 
   // Auto-advance past sign-in as soon as a user is present. For the mock this
   // is instant (signIn resolves synchronously); for real Supabase auth the
@@ -242,7 +258,9 @@ export default function AutoApplyFlow({
           Assisted application
         </h2>
 
-        {/* Step indicator — three labelled steps; the current one is emphasized. */}
+        {/* Step indicator — three labelled steps; the current one is emphasized.
+            Hidden while the assembled package is shown (it replaces the stepper). */}
+        {!showPackage && (
         <ol className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
           {STEP_ORDER.map((s, i) => (
             <li key={s} className="flex items-center gap-2">
@@ -260,8 +278,29 @@ export default function AutoApplyFlow({
             </li>
           ))}
         </ol>
+        )}
 
-        {step === "signin" && (
+        {/* G5: the assembled submission-ready package, rendered in-dialog. When
+            shown it replaces the stepper body so there's only one focus trap. */}
+        {showPackage && opportunity && profile && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowPackage(false)}
+              className={closeTextBtnClass + " mt-3"}
+            >
+              &larr; Back to requirements
+            </button>
+            <ApplicationPackage
+              opportunity={opportunity}
+              profile={profile}
+              autoApplyReqs={form}
+              onClose={() => setShowPackage(false)}
+            />
+          </div>
+        )}
+
+        {!showPackage && step === "signin" && (
           <div>
             <p id="auto-apply-flow-desc" className={bodyClass}>
               Assisted application is a Pro feature we&rsquo;re building toward. This is a preview so
@@ -279,7 +318,7 @@ export default function AutoApplyFlow({
           </div>
         )}
 
-        {step === "requirements" && (
+        {!showPackage && step === "requirements" && (
           <div>
             <p id="auto-apply-flow-desc" className={bodyClass}>
               Here&rsquo;s what assisted application would need on file before it could act for you.
@@ -294,6 +333,26 @@ export default function AutoApplyFlow({
                 disagree about what's on file. */}
             {opportunity && (
               <ApplicationChecklist opportunity={opportunity} allRegistrationsSatisfied={allSatisfied} />
+            )}
+
+            {/* G5: assemble a submission-ready package (G1→G2→G3→G4→D6). Only
+                offered when we have both the opportunity and the founder's
+                profile — an absent profile is never fabricated. Nothing is
+                submitted; the package ends in an honest AOR hand-off. */}
+            {canDraft && (
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowPackage(true)}
+                  className={primaryBtnClass}
+                >
+                  Draft my application
+                </button>
+                <p className={`mt-2 ${reqDetailClass}`}>
+                  Pre-fills your forms and budget and drafts a grounded narrative section. Nothing is
+                  submitted — you review and submit through your authorized AOR.
+                </p>
+              </div>
             )}
 
             <h4 className={legendClass + " mt-6"}>Registrations on file</h4>
@@ -434,7 +493,7 @@ export default function AutoApplyFlow({
           </div>
         )}
 
-        {step === "review" && (
+        {!showPackage && step === "review" && (
           <div>
             <p className={`mt-4 font-display text-[18px] font-bold leading-snug ${design ? "text-foreground" : "text-ink"}`}>
               Admin review required prior to granting auto-apply approval.

@@ -20,12 +20,14 @@ import {
   type DraftClaim,
   type DraftGap,
 } from "../contracts/applicationDraft";
-// Reuse the EXACT check:prompts guard machinery — not a parallel linter. This
-// is the same `findBannedPhrases` the `check:prompts` gate runs over every
-// prompt template; `validateDraftGrounding` clause (d) applies it to generated
-// `draft_text` so the "no eligibility/award assertion" rule is enforced by one
-// shared definition of "banned phrasing" (tsx/allowJs import the .mjs directly).
-import { findBannedPhrases } from "../../scripts/check-prompt-registry.mjs";
+// Reuse the EXACT check:prompts banned-phrasing definition — not a parallel
+// linter. `findBannedPhrases` lives in the dependency-free `banned-phrases.mjs`
+// (also re-exported by `check-prompt-registry.mjs`, which the gate runs), so
+// this server-bundled module gets the ONE shared definition of "banned phrasing"
+// WITHOUT pulling the check script's build-only `typescript`/`node:fs`/`new URL`
+// machinery into the webpack bundle. `validateDraftGrounding` clause (d) applies
+// it to generated `draft_text` (no eligibility/award assertions).
+import { findBannedPhrases } from "../../scripts/banned-phrases.mjs";
 
 /**
  * WS-G / G2 — grounded narrative drafting.
