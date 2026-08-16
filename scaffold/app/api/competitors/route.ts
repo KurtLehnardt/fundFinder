@@ -30,6 +30,11 @@ const STOPWORDS = new Set([
   "the", "and", "for", "with", "that", "this", "from", "into", "your", "our", "their", "who", "must",
   "company", "companies", "software", "platform", "based", "using", "customers", "which", "have", "has",
   "are", "was", "will", "they", "them", "its", "a", "an", "of", "to", "in", "on", "by", "or",
+  // Generic business/product filler that carries little sector signal — dropping it
+  // lets the more distinctive nouns survive into the 6 kept terms (see deriveKeywords).
+  "builds", "build", "building", "provides", "provide", "providing", "offering", "offers",
+  "solution", "solutions", "service", "services", "product", "products", "enables", "enabling",
+  "system", "systems", "management", "help", "helps", "helping", "make", "makes", "making",
 ]);
 
 /** Fallback keyword derivation when the client sends none (prefer profile expandedTerms). */

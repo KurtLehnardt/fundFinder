@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { embed, cosine } from "../embed";
+import { embedBatch, cosine } from "../embed";
 import { loadPrompt } from "../prompts";
 import type { CostMeter } from "../metering/meter";
 import { retrieveAwards, type RawAwardRecord } from "./retrieve";
-import { searchWebCompetitors, type RawWebProfile } from "./web";
+import { searchWebCompetitors, type RawWebProfile, type WebSearchResult } from "./web";
 import {
   CompetitorAnalysisSchema,
   type CompetitorAnalysis,
@@ -245,6 +245,34 @@ function assignIds(records: Array<RawAwardRecord & { similarity?: number }>): Gr
 }
 
 /**
+ * Build the exa web-search query for comparable PRIVATE companies.
+ *
+ * The distinctive signal lives in `keywords` (the profile's expanded government
+ * vocabulary — e.g. "biomanufacturing, BARDA, 21 CFR Part 11"); the raw
+ * description on its own is dominated by generic category words ("platform",
+ * "MES", "software"), which is why an un-keyworded query returns generic vendors.
+ * So we LEAD with the persona + those keywords, then append a short description
+ * tail for context. exa's `category:"company"` already scopes results to
+ * companies, so we drop the "startups and companies comparable to" boilerplate
+ * that only diluted the semantic signal. An explicit caller `webQuery` wins.
+ */
+export function buildWebQuery(input: {
+  persona: string;
+  personaDescription: string;
+  keywords?: string[];
+  webQuery?: string;
+}): string {
+  if (input.webQuery && input.webQuery.trim()) return input.webQuery.trim();
+  const kws = (input.keywords ?? [])
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const desc = input.personaDescription.replace(/\s+/g, " ").trim().slice(0, 180);
+  const kwPart = kws.length ? ` — ${kws.join(", ")}` : "";
+  return `Companies similar to ${input.persona}${kwPart}. ${desc}`.trim();
+}
+
+/**
  * Run the full pipeline and return a schema-VALIDATED CompetitorAnalysis. Throws
  * `InsufficientEvidenceError` when too few grounded records were reachable (the
  * route maps that to an honest fall-back-to-demo), and a `ZodError` if — against
@@ -253,6 +281,21 @@ function assignIds(records: Array<RawAwardRecord & { similarity?: number }>): Gr
 export async function analyzeCompetitors(input: AnalyzeInput): Promise<CompetitorAnalysis> {
   const keepTopK = input.keepTopK ?? 8;
   const notes: string[] = [];
+
+  // [3-early] WEB (started concurrently). Comparable private companies depend only
+  // on the persona/description/keywords — NOT on the retrieved records — so we kick
+  // the exa search off now and let it overlap retrieval + rerank instead of running
+  // serially after them. searchWebCompetitors never throws (it returns an honest
+  // degradation note), and the override branch resolves immediately, so starting it
+  // before the retrieval guard below can't leave a rejecting promise dangling.
+  const override = input.webProfilesOverride;
+  const webJob: Promise<WebSearchResult> =
+    override && override.length
+      ? Promise.resolve({
+          profiles: override,
+          notes: [`Included ${override.length} supplied web competitor profile(s).`],
+        })
+      : searchWebCompetitors({ query: buildWebQuery(input), numResults: 5, signal: input.signal });
 
   // [1] RETRIEVE
   const retrieval = await retrieveAwards({ keywords: input.keywords, perKeyword: input.perKeyword, signal: input.signal });
@@ -263,18 +306,17 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
     );
   }
 
-  // [2] RERANK by similarity to the persona — degrade to retrieval order if embeddings fail.
+  // [2] RERANK by similarity to the persona — ONE batched embedding call for the
+  // persona + every record (was a serial per-record `await embed()` loop, the
+  // dominant latency sink). Degrades to retrieval order if embeddings fail.
   const withSim: (RawAwardRecord & { similarity?: number })[] = retrieval.records.map((r) => ({ ...r }));
   try {
-    const personaVec = await embed(input.personaDescription, input.meter, input.signal);
-    for (const r of withSim) {
-      try {
-        const v = await embed(`${r.recipient}. ${r.abstract}`, input.meter, input.signal);
-        r.similarity = cosine(personaVec, v);
-      } catch {
-        r.similarity = 0;
-      }
-    }
+    const texts = [input.personaDescription, ...withSim.map((r) => `${r.recipient}. ${r.abstract}`)];
+    const vecs = await embedBatch(texts, input.meter, input.signal);
+    const personaVec = vecs[0];
+    withSim.forEach((r, i) => {
+      r.similarity = cosine(personaVec, vecs[i + 1]);
+    });
     withSim.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
   } catch {
     notes.push("Similarity rerank unavailable (embeddings) — showing records in retrieval order.");
@@ -282,20 +324,10 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
 
   const records = assignIds(withSim.slice(0, keepTopK));
 
-  // [3] WEB — optional private comparables. Use capture-supplied profiles when
-  // given (skips the exa HTTP call); otherwise search live (skipped w/o key).
-  let rawWeb: RawWebProfile[];
-  if (input.webProfilesOverride && input.webProfilesOverride.length) {
-    rawWeb = input.webProfilesOverride;
-    notes.push(`Included ${rawWeb.length} supplied web competitor profile(s).`);
-  } else {
-    const webQuery =
-      input.webQuery ||
-      `category:company startups and companies comparable to ${input.persona}: ${input.personaDescription.slice(0, 240)}`;
-    const web = await searchWebCompetitors({ query: webQuery, numResults: 5, signal: input.signal });
-    notes.push(...web.notes);
-    rawWeb = web.profiles;
-  }
+  // [3] WEB — await the search kicked off above (now overlapped, not serial).
+  const web = await webJob;
+  notes.push(...web.notes);
+  const rawWeb: RawWebProfile[] = web.profiles;
   const webProfiles: WebCompetitorProfile[] = rawWeb.map((p, i) => ({
     id: `web_${i + 1}`,
     company: p.company,
