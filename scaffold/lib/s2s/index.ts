@@ -1,0 +1,36 @@
+/**
+ * Public entry point for the WS-G / G6 S2S integration layer. Import from
+ * `@/lib/s2s` (or `../s2s`), not from the individual files in this directory.
+ *
+ * G6 CONSUMES the shared `AssembledPackage` (spec §0.1) and adds only the
+ * mapping / transport / gate seam — it never assembles a package. This barrel
+ * re-exports the public core-contract surface (T-A). Later tasks extend it:
+ *   - T-B: `xml.ts` (`toGrantApplicationXml`, `toSoapEnvelope`)
+ *   - T-C: `transport.ts` / `authorize.ts` / `config.ts` / `client.ts`
+ *
+ * Everything here is deterministic and honest by construction: no receipt is
+ * ever non-mock, no fact is ever fabricated (see `types.ts` / `meta.ts`).
+ */
+
+// Core contracts (schemas + inferred types).
+export {
+  AorAuthorizationSchema,
+  SubmissionReceiptSchema,
+  SubmissionStatusSchema,
+  SubmissionStatusValueSchema,
+  SubmissionMetaSchema,
+  SUBMISSION_STATUS_VALUES,
+} from "./types";
+export type {
+  TransportKind,
+  AorAuthorization,
+  SubmissionReceipt,
+  SubmissionStatus,
+  SubmissionStatusValue,
+  SubmissionMeta,
+  LegalGate,
+  AssembledPackage,
+} from "./types";
+
+// Pure Opportunity → SubmissionMeta derivation.
+export { toSubmissionMeta } from "./meta";
