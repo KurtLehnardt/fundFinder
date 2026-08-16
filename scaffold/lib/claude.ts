@@ -3,6 +3,13 @@ import type { StartupProfile, Opportunity, Match, CriterionCheck, Tier } from ".
 import type { EligibilityBucket } from "./contracts/eligibilityDetermination";
 import { loadPrompt } from "./prompts";
 import type { CostMeter } from "./metering/meter";
+import {
+  type Assessment as TwoPassAssessment,
+  type PassAScore,
+  PROMOTION_FLOOR,
+  promotedIds,
+  assembleTwoPass,
+} from "./scoring/twoPass";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -289,6 +296,259 @@ function clampScore(score: number): number {
   const n = Number(score);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(100, n));
+}
+
+// ---------------------------------------------------------------------------
+// E3 — TWO-PASS SCORING (flag `e3_two_pass`, default OFF).
+//
+// Pass A: a cheap SCORE-ONLY sweep over the WHOLE candidate set on CHEAP_MODEL
+// (Haiku-class, ~5-10x cheaper) — one `{id, score}` per candidate, tiny
+// max_tokens. Pass B: the FULL narrative on the expensive MODEL, ONLY for the
+// candidates whose Pass-A score clears `PROMOTION_FLOOR`. This cuts cost/latency
+// ~3x: the expensive narrative call now runs over the handful that render as
+// real tiers, not every retrieved candidate. Non-promoted candidates keep their
+// Pass-A score (so `tierFromScore` still assigns them a tier), they simply don't
+// spend on narrative.
+//
+// The flag-OFF single-pass `explainMatches` above is byte-unchanged; two-pass is
+// an ADDITIVE, separately-exported path selected by `lib/match.ts` on the flag.
+// ---------------------------------------------------------------------------
+
+/**
+ * A dedicated Anthropic client for the two-pass calls, with a SHORTER per-call
+ * timeout than the single pass and `maxRetries: 0` (we do our own bounded
+ * retry, `withOverloadRetry`, below). Kept separate from `client()` so the
+ * flag-off path's client is untouched. The shorter timeout + our own retry keep
+ * the two-pass stages safely inside the route's `maxDuration = 120s` even when
+ * Anthropic is briefly overloaded.
+ *
+ * Tunable via `E3_TWO_PASS_TIMEOUT_MS` (must stay well under the deploy's
+ * maxDuration, with room for both passes to run sequentially).
+ */
+const E3_TWO_PASS_TIMEOUT_MS = Number(process.env.E3_TWO_PASS_TIMEOUT_MS) || 45_000;
+const E3_TWO_PASS_MAX_RETRIES = Number(process.env.E3_TWO_PASS_MAX_RETRIES) || 3;
+const E3_TWO_PASS_BACKOFF_MS = Number(process.env.E3_TWO_PASS_BACKOFF_MS) || 500;
+
+function twoPassClient(): Anthropic {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
+  return new Anthropic({ apiKey: key, timeout: E3_TWO_PASS_TIMEOUT_MS, maxRetries: 0 });
+}
+
+/**
+ * Is this error worth a bounded retry? Only transient SERVER-side conditions
+ * that fail FAST — Anthropic overload (529, the one that stalls precompute),
+ * rate-limit (429), and generic 5xx. Deliberately NOT a timeout / connection
+ * error: a timed-out call was genuinely slow, so retrying it risks multiplying
+ * the per-call timeout past the route budget — we let that batch degrade instead
+ * (the fan-out is `Promise.allSettled`, so one failed batch never fails the
+ * search). Because the retried conditions reject nearly immediately, the retry
+ * loop adds only backoff time, never another full timeout.
+ */
+function isRetryableOverload(err: unknown): boolean {
+  const status = (err as { status?: number } | undefined)?.status;
+  return typeof status === "number" && (status === 529 || status === 429 || status >= 500);
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run `fn`, retrying up to `E3_TWO_PASS_MAX_RETRIES` times on a fast-failing
+ * overload/transient error with short exponential backoff (+jitter, capped).
+ * A non-retryable error (or exhausting retries) rethrows to the caller, where
+ * the `Promise.allSettled` fan-out degrades that one batch to a partial result.
+ */
+async function withOverloadRetry<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= E3_TWO_PASS_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (signal?.aborted || attempt === E3_TWO_PASS_MAX_RETRIES || !isRetryableOverload(err)) throw err;
+      const backoff = Math.min(E3_TWO_PASS_BACKOFF_MS * 2 ** attempt, 4_000) + Math.floor(Math.random() * 250);
+      await sleep(backoff);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Pass A — cheap SCORE-ONLY sweep over EVERY candidate on CHEAP_MODEL. Batched
+ * and fault-tolerant (`Promise.allSettled`) exactly like the single pass: a
+ * batch that throws or emits non-JSON degrades to fewer scores rather than
+ * failing the search. Records under its own `candidate_prescore` stage so the
+ * cost breakdown attributes the cheap sweep separately from the expensive Pass B.
+ */
+async function scorePassA(
+  profile: StartupProfile,
+  candidates: Opportunity[],
+  meter: CostMeter | undefined,
+  signal: AbortSignal | undefined,
+): Promise<PassAScore[]> {
+  const SYSTEM = loadPrompt("scoreMatches").template;
+  const BATCH_A = 12; // score-only output is tiny; larger batches cut call count
+  const groups: Opportunity[][] = [];
+  for (let i = 0; i < candidates.length; i += BATCH_A) groups.push(candidates.slice(i, i + BATCH_A));
+
+  const scoreGroup = async (group: Opportunity[]): Promise<PassAScore[]> => {
+    const t0 = performance.now();
+    const msg = await withOverloadRetry(
+      () =>
+        twoPassClient().messages.create(
+          {
+            model: CHEAP_MODEL,
+            max_tokens: 1024, // just `[{id,score}]` per candidate — small on purpose
+            system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+            messages: [
+              {
+                role: "user",
+                content: `COMPANY:\n${wrapUntrusted(JSON.stringify(profile))}\n\nCANDIDATE OPPORTUNITIES:\n${wrapUntrusted(
+                  JSON.stringify(
+                    group.map((c) => ({
+                      id: c.id, program: c.program, agency: c.agency, kind: c.kind,
+                      description: c.description.slice(0, 1200), eligibility: c.eligibility,
+                      fundingLow: c.fundingLow, fundingHigh: c.fundingHigh, deadline: c.deadline,
+                    })),
+                  ),
+                )}`,
+              },
+            ],
+          },
+          { signal },
+        ),
+      signal,
+    );
+    recordUsage(meter, "candidate_prescore", msg.usage, performance.now() - t0, CHEAP_MODEL);
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    return parseJson<PassAScore[]>(text);
+  };
+
+  const fanOutStart = performance.now();
+  const settled = await Promise.allSettled(groups.map((group) => scoreGroup(group)));
+  meter?.recordStageLatency("candidate_prescore", performance.now() - fanOutStart);
+  const ok = settled
+    .filter((s): s is PromiseFulfilledResult<PassAScore[]> => s.status === "fulfilled")
+    .map((s) => s.value);
+  if (ok.length === 0) {
+    const firstErr = settled.find((s) => s.status === "rejected") as PromiseRejectedResult | undefined;
+    throw new Error(`All Pass-A scoring batches failed: ${firstErr?.reason?.message ?? "unknown error"}`);
+  }
+  return ok.flat().map((s) => ({ id: s.id, score: clampScore(s.score) }));
+}
+
+/**
+ * Pass B — the FULL narrative on the expensive MODEL for the PROMOTED subset
+ * only. Mirrors the single pass's `scoreGroup` (same `explainMatches` prompt,
+ * same prompt-caching breakpoint, same `candidate_analysis` stage) so a promoted
+ * candidate's narrative + score are identical to what the single pass produces —
+ * only wrapped in the two-pass client + bounded overload retry. `onBatch` is
+ * invoked as each batch settles so `lib/match.ts` can advance the progress bar.
+ */
+async function narratePassB(
+  profile: StartupProfile,
+  promoted: Opportunity[],
+  meter: CostMeter | undefined,
+  onBatchSettled: ((doneInPassB: number) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<TwoPassAssessment[]> {
+  if (promoted.length === 0) return [];
+  const SYSTEM = loadPrompt("explainMatches").template;
+  const BATCH = 8;
+  const groups: Opportunity[][] = [];
+  for (let i = 0; i < promoted.length; i += BATCH) groups.push(promoted.slice(i, i + BATCH));
+
+  const narrateGroup = async (group: Opportunity[]): Promise<TwoPassAssessment[]> => {
+    const t0 = performance.now();
+    const msg = await withOverloadRetry(
+      () =>
+        twoPassClient().messages.create(
+          {
+            model: MODEL,
+            max_tokens: 8000,
+            system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+            messages: [
+              {
+                role: "user",
+                content: `COMPANY:\n${wrapUntrusted(JSON.stringify(profile))}\n\nCANDIDATE OPPORTUNITIES:\n${wrapUntrusted(
+                  JSON.stringify(
+                    group.map((c) => ({
+                      id: c.id, program: c.program, agency: c.agency, kind: c.kind,
+                      description: c.description.slice(0, 1200), eligibility: c.eligibility,
+                      fundingLow: c.fundingLow, fundingHigh: c.fundingHigh, deadline: c.deadline,
+                    })),
+                  ),
+                )}`,
+              },
+            ],
+          },
+          { signal },
+        ),
+      signal,
+    );
+    recordUsage(meter, "candidate_analysis", msg.usage, performance.now() - t0);
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    return parseJson<TwoPassAssessment[]>(text);
+  };
+
+  const fanOutStart = performance.now();
+  let doneInPassB = 0;
+  const settled = await Promise.allSettled(
+    groups.map((group) =>
+      narrateGroup(group).finally(() => {
+        doneInPassB += group.length;
+        try { onBatchSettled?.(doneInPassB); } catch { /* progress is best-effort */ }
+      }),
+    ),
+  );
+  meter?.recordStageLatency("candidate_analysis", performance.now() - fanOutStart);
+  const ok = settled
+    .filter((s): s is PromiseFulfilledResult<TwoPassAssessment[]> => s.status === "fulfilled")
+    .map((s) => s.value);
+  // Pass B failing entirely is NOT fatal here (unlike the single pass): every
+  // candidate still has a Pass-A score, so `assembleTwoPass` degrades each
+  // promoted candidate to its score-only assessment and the search still returns
+  // ranked tiers. So we return whatever succeeded (possibly []).
+  return ok.flat().map((a) => ({ ...a, score: clampScore(a.score) }));
+}
+
+/**
+ * Stage 2 (two-pass) — the flag-ON counterpart to `explainMatches`. Same
+ * signature and same return shape, so `lib/match.ts` can call either behind the
+ * `e3_two_pass` flag with no other change. Runs Pass A over all candidates,
+ * promotes those clearing `PROMOTION_FLOOR`, runs Pass B over the promoted
+ * subset, and merges back into one `Assessment[]` (promoted → full narrative;
+ * others → score-only). Scores are clamped server-side (§5.5) in each pass.
+ */
+export async function explainMatchesTwoPass(
+  profile: StartupProfile,
+  candidates: Opportunity[],
+  meter?: CostMeter,
+  onBatch?: (doneCandidates: number, totalCandidates: number) => void,
+  signal?: AbortSignal,
+): Promise<TwoPassAssessment[]> {
+  const total = candidates.length;
+  const passA = await scorePassA(profile, candidates, meter, signal);
+  const promotedSet = promotedIds(passA, PROMOTION_FLOOR);
+  const promoted = candidates.filter((c) => promotedSet.has(c.id));
+
+  // Progress: non-promoted candidates are already "done" (they keep their
+  // Pass-A score); promoted ones complete as their Pass-B batches settle. This
+  // keeps `done` monotonic and reaching `total` at the end.
+  const alreadyDone = total - promoted.length;
+  try { onBatch?.(Math.min(alreadyDone, total), total); } catch { /* best-effort */ }
+
+  const passB = await narratePassB(
+    profile,
+    promoted,
+    meter,
+    (doneInPassB) => {
+      try { onBatch?.(Math.min(alreadyDone + doneInPassB, total), total); } catch { /* best-effort */ }
+    },
+    signal,
+  );
+
+  return assembleTwoPass(candidates.map((c) => c.id), passA, passB, PROMOTION_FLOOR);
 }
 
 /**

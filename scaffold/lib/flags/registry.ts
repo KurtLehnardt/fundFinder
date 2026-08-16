@@ -43,7 +43,8 @@ export type FlagName =
   | "d4_opportunity_graph"
   | "d3_funding_strategy"
   | "d5_alerts"
-  | "r5_deep_analysis";
+  | "r5_deep_analysis"
+  | "e3_two_pass";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -216,5 +217,16 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "recommendations, and gaps to exploit — Max-tier gated, with a demo-fixture fallback. " +
       "Default OFF; the canned demo-first surface stays the default until this ships.",
     envVar: "NEXT_PUBLIC_FLAG_R5_DEEP_ANALYSIS",
+  },
+  e3_two_pass: {
+    name: "e3_two_pass",
+    requirement: "E3",
+    description:
+      "Two-pass candidate scoring: a cheap score-only Pass A over the whole candidate set, then the " +
+      "full narrative (Pass B) only for candidates whose Pass-A score clears the render threshold. " +
+      "Cuts cost/latency ~3x and hardens precompute against Anthropic 529 overload; non-promoted " +
+      "candidates keep their Pass-A score so tiers still compute. Scoring bands (tierFromScore) are " +
+      "unchanged, so the honest-no is untouched.",
+    envVar: "NEXT_PUBLIC_FLAG_E3_TWO_PASS",
   },
 };
