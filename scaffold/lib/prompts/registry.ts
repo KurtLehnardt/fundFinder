@@ -240,8 +240,82 @@ Return ONLY a JSON object — no preamble, no markdown fences — of exactly thi
 
 Aim for 3-5 questions when the description leaves gates or routing open; return fewer (down to zero) when it does not. Order does not matter — the caller re-sorts gate-first — but do put the highest-value gate questions in.`;
 
+/**
+ * WS-G / G1 — grounded program-requirement extraction (the consuming module is
+ * `lib/apply/requirements.ts`). Given ONE opportunity's real announcement text,
+ * pull out the structured application requirements — required narrative
+ * sections + their prompts, referenced forms, page/format limits, budget rules,
+ * required attachments, key dates, and eligibility notes.
+ *
+ * THE ONE RULE THAT MATTERS MORE THAN COVERAGE: every atom is grounded in the
+ * ACTUAL text or it is marked not-specified. The model attaches a verbatim
+ * `source_quote` to everything it extracts, and emits the exact sentinel
+ * `[not specified in the announcement]` for anything the text does not state —
+ * it never invents a plausible-sounding requirement. `annotateGrounding` in
+ * requirements.ts re-checks every quote against the source as defense-in-depth,
+ * so a fabricated requirement is caught even if the model slips.
+ *
+ * Authored here (new prompt), so it is NOT in `V1_BASELINE_HASHES` (that set is
+ * the historical anchor for the three prompts migrated verbatim out of
+ * `lib/claude.ts`). Its `contentHash` is computed by `definePrompt` like any
+ * other entry; a text change here is a new version, not a mutation.
+ */
+const EXTRACT_APPLICATION_REQUIREMENTS_V1_TEMPLATE = `You extract the APPLICATION REQUIREMENTS from a single federal funding announcement for a grants/SBIR application-drafting tool.
+
+You are given the announcement's own text (program title, agency, description/synopsis, eligibility, and any structured fields the corpus carries). Your job is to turn it into a structured checklist of what an applicant must produce.
+
+THE ONE RULE THAT OVERRIDES EVERYTHING ELSE — GROUND EVERYTHING, INVENT NOTHING:
+- Extract ONLY what the announcement text LITERALLY states. Never add a requirement because it is "typical", "standard", or "usually required" for this kind of program. Your prior knowledge about how grants normally work is NOT a source.
+- Every item you extract must carry a "source_quote": a VERBATIM substring copied from the announcement text — the exact words the item rests on. Do not paraphrase inside source_quote; copy it character-for-character.
+- If the announcement text does not state something, DO NOT GUESS. Emit the item with "specified": false, its value field(s) set to the exact string "[not specified in the announcement]", and "source_quote": "". It is correct and expected for many fields to come back not-specified — a short synopsis rarely states page limits, forms, or exact deadlines, and saying so honestly is the whole point.
+- A fabricated requirement (a page limit, form number, deadline, or attachment the text never mentions) is the single worst failure here. When in doubt, mark it not-specified.
+
+You are NOT determining eligibility. Report eligibility_notes only as statements the announcement makes ("the announcement states ...", "the text lists ... as eligible applicants"). Never assert a definitive determination about a specific applicant.
+
+Return ONLY a JSON object — no preamble, no markdown fences — of exactly this shape:
+{
+  "narrative_sections": [
+    {
+      "key": string,            // stable slug, e.g. "project_summary", "statement_of_work"
+      "title": string,          // human title of the section
+      "prompt": string,         // the question/instruction the applicant must answer for this section, drawn from the text
+      "source_quote": string,   // verbatim substring the section rests on
+      "specified": boolean
+    }
+  ],
+  "forms": [
+    { "name": string, "source_quote": string, "specified": boolean }        // e.g. "SF-424", "SF-424A"
+  ],
+  "format_limits": [
+    { "label": string, "value": string, "source_quote": string, "specified": boolean }  // page count, font, spacing, margins, file type
+  ],
+  "budget_rules": [
+    { "rule": string, "source_quote": string, "specified": boolean }        // cost-share, funding cap/floor, cost-share, disallowed costs
+  ],
+  "attachments": [
+    { "name": string, "source_quote": string, "specified": boolean }        // letters of support, bios/CVs, budget narrative, work plan
+  ],
+  "key_dates": [
+    { "label": string, "date": string, "source_quote": string, "specified": boolean }   // application deadline, LOI date, start date
+  ],
+  "eligibility_notes": [
+    { "note": string, "source_quote": string, "specified": boolean }        // who the text says may apply
+  ]
+}
+
+GUIDANCE:
+- narrative_sections is the most important array. Derive the sections an applicant must actually write from what the text asks for (e.g. a stated priority area, a required focus, a proposal component). Each "prompt" should read as a plain-language instruction to a first-time applicant. Ground every one in a source_quote.
+- Prefer FEWER, well-grounded items over many thin ones. Every item with "specified": true MUST have a source_quote that is a real substring of the announcement text.
+- If a whole array has nothing grounded in the text, you may either return an empty array [] or a single item with "specified": false and the sentinel value. Do not pad arrays with invented items to look complete.
+- Write prompts and labels for a founder, not a bureaucrat: plain language, no unexplained jargon.`;
+
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
+  extractApplicationRequirements: definePrompt(
+    "extractApplicationRequirements",
+    "v1",
+    EXTRACT_APPLICATION_REQUIREMENTS_V1_TEMPLATE,
+  ),
   explainMatches: definePrompt("explainMatches", "v2", EXPLAIN_MATCHES_V2_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
   generateInterviewQuestions: definePrompt(
