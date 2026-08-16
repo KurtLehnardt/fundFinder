@@ -39,11 +39,26 @@ export const OpportunitySourceSchema = z.enum([
 ]);
 export type OpportunitySource = z.infer<typeof OpportunitySourceSchema>;
 
+/**
+ * The *instrument* an opportunity offers, independent of its `source`. Broad on
+ * purpose so the corpus can carry the full spread of federal/adjacent programs:
+ *   grant       — non-repayable award (Grants.gov, assistance listings)
+ *   rd          — research & development contract/award (this is how SBIR/STTR
+ *                 is modeled: `source:"sbir"` + `kind:"rd"` — there is
+ *                 deliberately NO `sbir` kind; the program is a source, its
+ *                 instrument is R&D)
+ *   assistance  — assistance-listings program (CFDA-style)
+ *   procurement — a purchase/contract (SAM contracts)
+ *   loan        — repayable capital (e.g. SBA/USDA loan & loan-guarantee programs)
+ *   scholarship — individual educational award (fellowships, scholarships)
+ */
 export const OpportunityKindSchema = z.enum([
   "grant",
   "rd",
   "assistance",
   "procurement",
+  "loan",
+  "scholarship",
 ]);
 export type OpportunityKind = z.infer<typeof OpportunityKindSchema>;
 
