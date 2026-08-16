@@ -42,28 +42,22 @@
 import ts from "typescript";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, extname } from "node:path";
+// The pure, dependency-free banned-phrasings core lives in its own module so
+// runtime code (lib/apply/draft.ts, bundled by webpack) can import it without
+// dragging in `typescript`/`node:fs`/`new URL(...)` from this build script.
+// Re-exported below so every existing importer of THIS file is unchanged.
+import { BANNED_PHRASES, findBannedPhrases } from "./banned-phrases.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SCAN_DIRS = ["lib", "app"];
 const EXCLUDE_DIR_PARTS = ["node_modules", ".next", "lib/prompts"];
 const LONG_STATIC_CONTENT_THRESHOLD = 120; // chars
 
-/**
- * Definitive-eligibility language a prompt template must never contain —
- * these read as the model making a determination instead of a hedged
- * assessment (R8 / explainMatches rule 1). Each entry is matched as a plain
- * case-insensitive substring (not a regex), so the list stays auditable at a
- * glance. Extend this list rather than adding a second check — this IS the
- * check:prompts machinery.
- */
-export const BANNED_PHRASES = [
-  "you qualify",
-  "you are eligible",
-  "you're eligible",
-  "guaranteed",
-  "you will receive",
-  "you will be awarded",
-];
+// `BANNED_PHRASES` + `findBannedPhrases` are defined in ./banned-phrases.mjs
+// (imported above) and re-exported here so every existing importer of this file
+// — the check:prompts gate, its tests, and the G2 drafting guard/tests — keeps
+// importing them from `check-prompt-registry.mjs` unchanged.
+export { BANNED_PHRASES, findBannedPhrases };
 
 /** @param {string} dir */
 function walk(dir, out = []) {
@@ -159,12 +153,6 @@ function checkFile(filePath) {
   visit(sf);
 
   return violations.map((v) => ({ file: relPath, ...v }));
-}
-
-/** Case-insensitive substring scan of `text` against `BANNED_PHRASES`. Exported for tests. */
-export function findBannedPhrases(text) {
-  const lower = text.toLowerCase();
-  return BANNED_PHRASES.filter((phrase) => lower.includes(phrase));
 }
 
 /**

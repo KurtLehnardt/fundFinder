@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
+import { useMemo, useState } from "react";
+import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity, type StartupProfile } from "@/lib/types";
+import { startupProfileToCompanyProfile } from "@/lib/apply/package";
 import type { EligibilityBucket } from "@/lib/contracts/eligibilityDetermination";
 import AutoApplyModal from "@/components/AutoApplyModal";
 import AutoApplyFlow from "@/components/AutoApplyFlow";
@@ -140,7 +141,18 @@ function fundingRange(o: Opportunity): string | null {
   return null;
 }
 
-export default function OpportunityCard({ m, index }: { m: Match; index: number }) {
+export default function OpportunityCard({
+  m,
+  index,
+  startupProfile,
+}: {
+  m: Match;
+  index: number;
+  /** G5: the founder's extracted v1 profile (from `map.profile`), bridged to a
+   *  §3.1 CompanyProfile for the assisted-apply "Draft my application" flow.
+   *  Optional/additive — absent leaves the pre-G5 behavior unchanged. */
+  startupProfile?: StartupProfile;
+}) {
   // Expand the first three cards so criteria / ineligibility / history read at a glance.
   const [open, setOpen] = useState(index < 3);
   // FE-01 / design revamp: the CON-02 USWDS 60/30/10 restyle is now the
@@ -153,6 +165,14 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   // the static upsell modal. Default OFF -> the FE-06 path below is unchanged.
   // Still a preview: it never submits anything and gates nothing server-side.
   const assistedApplyFlow = isFlagEnabled("r6_auto_apply");
+  // G5: bridge the founder's extracted v1 profile to a §3.1 CompanyProfile once,
+  // so the assisted-apply flow can assemble a grounded package. Undefined when no
+  // profile was threaded down (the flow then simply doesn't offer "Draft my
+  // application"); never fabricated.
+  const companyProfile = useMemo(
+    () => (startupProfile ? startupProfileToCompanyProfile(startupProfile) : undefined),
+    [startupProfile],
+  );
   // PRO-01: locked "Analyze competing companies" stub — opens a Pro-upsell
   // modal from the award-history section, never runs any analysis.
   const [competitorOpen, setCompetitorOpen] = useState(false);
@@ -407,8 +427,14 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
 
       {autoApplyOpen &&
         (assistedApplyFlow ? (
-          // R6 ON: the walkable assisted-apply demo stepper.
-          <AutoApplyFlow onClose={() => setAutoApplyOpen(false)} />
+          // R6 ON: the walkable assisted-apply demo stepper. G5: thread the
+          // opportunity + bridged profile so "Draft my application" can assemble
+          // the submission-ready package end-to-end.
+          <AutoApplyFlow
+            onClose={() => setAutoApplyOpen(false)}
+            opportunity={o}
+            profile={companyProfile}
+          />
         ) : (
           // R6 OFF (default): the FE-06 static Pro-upsell modal, unchanged.
           <AutoApplyModal
