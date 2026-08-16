@@ -5,6 +5,7 @@ import EligibilityBuckets, { type EligibilityItem } from "./EligibilityBuckets";
 import SimilarCompanies from "./SimilarCompanies";
 import AgencyMap from "./AgencyMap";
 import OpportunityGroups from "./OpportunityGroups";
+import OpportunityGraph from "./OpportunityGraph";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
@@ -281,6 +282,11 @@ export default function OpportunityMap({ map }: { map: MapT }) {
             </div>
           </section>
         )}
+
+        {/* D4 — compact Startup -> Technology -> Agency -> Program -> Award
+            node-link graph over the SAME map data rendered above. Default
+            OFF behind d4_opportunity_graph; see components/OpportunityGraph.tsx. */}
+        {isFlagEnabled("d4_opportunity_graph") && <OpportunityGraph map={map} />}
 
         <p className={footerClass}>
           These are assessments, not eligibility determinations. Confirm requirements with the
