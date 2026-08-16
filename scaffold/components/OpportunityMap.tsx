@@ -2,8 +2,10 @@
 import { Component, type ReactNode } from "react";
 import OpportunityCard from "./OpportunityCard";
 import EligibilityBuckets, { type EligibilityItem } from "./EligibilityBuckets";
+import SimilarCompanies from "./SimilarCompanies";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
+import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M+` : `$${Math.round(n / 1e3)}K+`;
@@ -88,6 +90,13 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const agencyIntelligence = Array.isArray(map.agencyIntelligence) ? map.agencyIntelligence : [];
   const w = map.weakFieldFinding;
 
+  // D1 — free aggregate "Similar companies funded" panel. Pure/hermetic:
+  // dedupes provenance-verified award recipients across the strong matches
+  // (falling back to all matches if none of the strong ones have verified
+  // recipients), independent of the paid, Max-gated CompetitorAnalysisModal /
+  // CompetitorResults deep-analysis flow, which this never reads or affects.
+  const similarRecipients = aggregateSimilarCompanies(matches, { limit: 10 });
+
   // Cards: real fits only (likely / verify / adjacent), best first, capped.
   const shown = matches
     .filter((m) => m && m.tier !== "none")
@@ -163,6 +172,11 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   const agencyWhyClass = design
     ? "mt-1.5 text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "mt-1.5 font-body text-[13px] leading-relaxed text-slate-550";
+
+  // D1 — same section rhythm as "Agencies that matter most to you" above it.
+  const similarCompaniesCaptionClass = design
+    ? "mt-1.5 max-w-2xl text-pretty font-body text-[13px] leading-relaxed text-foreground"
+    : "mt-1.5 max-w-2xl font-body text-[13px] leading-relaxed text-slate-550";
 
   const footerClass = design
     ? "mt-10 border-t border-structure-on-canvas pt-5 text-pretty font-body text-[12px] leading-relaxed text-foreground"
@@ -251,6 +265,24 @@ export default function OpportunityMap({ map }: { map: MapT }) {
                   <p className={agencyWhyClass}>{a.why}</p>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* D1 — free aggregate panel, NEVER Max-gated (no useBilling / useEntitlements
+            read here or in SimilarCompanies). Honestly labeled: a rollup of verified
+            public federal award records, not a personalized/live competitor analysis —
+            that stays the separate Maximum-gated CompetitorAnalysisModal /
+            CompetitorResults flow, untouched by this section. */}
+        {similarRecipients.length > 0 && (
+          <section className={agenciesSectionClass}>
+            <p className={eyebrowClass(design, "mb-1")}>Companies like yours that received federal funding</p>
+            <p className={similarCompaniesCaptionClass}>
+              Verified public federal award records, deduped across your strongest matches — each row links to
+              its official source record. Not a personalized competitor analysis.
+            </p>
+            <div className="mt-4">
+              <SimilarCompanies recipients={similarRecipients} />
             </div>
           </section>
         )}
