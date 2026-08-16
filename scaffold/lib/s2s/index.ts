@@ -34,3 +34,7 @@ export type {
 
 // Pure Opportunity → SubmissionMeta derivation.
 export { toSubmissionMeta } from "./meta";
+
+// Deterministic, gap-preserving AssembledPackage → grants.gov application-XML +
+// SOAP-envelope mapping (T-B). UNVERIFIED / re-verify-required, mock-only.
+export { SCHEMA_VERSION, toGrantApplicationXml, toSoapEnvelope } from "./xml";
