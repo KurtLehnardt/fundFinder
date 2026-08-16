@@ -39,5 +39,6 @@ export function readRawOverrides(): Record<FlagName, string | undefined> {
     d4_opportunity_graph: process.env.NEXT_PUBLIC_FLAG_D4_OPPORTUNITY_GRAPH,
     d3_funding_strategy: process.env.NEXT_PUBLIC_FLAG_D3_FUNDING_STRATEGY,
     d5_alerts: process.env.NEXT_PUBLIC_FLAG_D5_ALERTS,
+    r5_deep_analysis: process.env.NEXT_PUBLIC_FLAG_R5_DEEP_ANALYSIS,
   };
 }
