@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
   PROFILE_FIELD_META,
@@ -168,6 +168,67 @@ export function computeFieldCell(
 }
 
 // ---------------------------------------------------------------------------
+// UX-polish pure helpers (exported for testing — no React, no network).
+// ---------------------------------------------------------------------------
+
+/**
+ * Fields that get a full-width cell in the responsive two-column field grid
+ * (the big description box, and the two fields whose answers tend to run
+ * long: the yes/no-plus-detail R&D field and free-text "target customers").
+ * Every other field gets a half-width cell from the `sm:` breakpoint up and
+ * always renders full-width below it. Purely presentational — it has no
+ * bearing on `computeGaps`, validation, or what gets captured.
+ */
+const WIDE_FIELDS = new Set<string>(["raw_text", "rd_activities", "target_customers"]);
+
+/** Whether `field` should span both columns of the responsive field grid. */
+export function isWideField(field: string): boolean {
+  return WIDE_FIELDS.has(field);
+}
+
+/**
+ * Groups the 8 optional-but-material fields under two founder-facing
+ * headings so "A few more details" reads as organized sections instead of
+ * one long list. Purely a presentation grouping — `MATERIAL_PROFILE_FIELDS`
+ * (the actual required-ness contract gap-detection reads) is untouched; a
+ * field's group membership here has no bearing on whether it's asked about.
+ */
+export const MATERIAL_FIELD_GROUPS: readonly { heading: string; fields: readonly string[] }[] = [
+  {
+    heading: "Company & product",
+    fields: ["employee_count", "product_maturity", "target_customers", "rd_activities"],
+  },
+  {
+    heading: "Financials",
+    fields: ["revenue", "funding_stage", "capital_raised", "capital_requirement"],
+  },
+];
+
+/** Founder-facing progress copy for the required-fields section. */
+export function requiredProgressText(totalRequired: number, remaining: number): string {
+  const done = Math.max(0, totalRequired - remaining);
+  if (remaining <= 0) return `All ${totalRequired} required fields complete.`;
+  return `${done} of ${totalRequired} required field${totalRequired === 1 ? "" : "s"} complete`;
+}
+
+/**
+ * Inline validation copy for a single field, or `null` when nothing should
+ * render. Only `required`-tier fields ever produce a message — the 8
+ * material fields are optional by definition, so they never get one — and
+ * only once the founder has actually left the field (`touched`), so a fresh
+ * form never opens already showing a wall of errors.
+ */
+export function fieldValidationMessage(
+  meta: ProfileFieldMeta,
+  provided: boolean,
+  touched: boolean,
+): string | null {
+  if (meta.requirement !== "required") return null;
+  if (provided || !touched) return null;
+  return `${meta.label} is required.`;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -207,6 +268,27 @@ export default function ProfileQuestionnaire({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // UX polish: which fields the founder has actually blurred at least once —
+  // gates inline "required" validation so a fresh form never opens already
+  // showing errors, only after a required field has been visited and left
+  // empty (see `fieldValidationMessage` above).
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+
+  // UX polish: keyboard focus management. Clicking "Edit" on a provided-field
+  // summary row swaps it for the real input; a mouse user sees exactly where
+  // to click next, but a keyboard/screen-reader user is stranded unless focus
+  // follows. `pendingFocusFieldRef` records which field's input should
+  // receive focus on the next render where that input actually exists.
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const pendingFocusFieldRef = useRef<string | null>(null);
+
+  // Same idea for the optional-details section: a manual click on "+ Add
+  // optional details" should move focus into the newly-revealed heading. The
+  // automatic reveal-on-required-complete effect below must NOT steal focus
+  // the same way (it can fire mid-keystroke in a required field), so only a
+  // real click sets `manualOpenRef`.
+  const materialHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const manualOpenRef = useRef(false);
 
   // Hydrate the draft from localStorage once, client-only (readJSON no-ops
   // during SSR and returns the fallback).
@@ -272,6 +354,31 @@ export default function ProfileQuestionnaire({
     if (requiredGaps.length === 0) setShowOptional(true);
   }, [requiredGaps.length]);
 
+  // Focus the newly-revealed input after an "Edit" click (see
+  // `pendingFocusFieldRef` above) — fires once per edit, right after the
+  // field's editable markup actually lands in the DOM.
+  useEffect(() => {
+    const field = pendingFocusFieldRef.current;
+    if (field && editingFields.has(field)) {
+      fieldRefs.current[field]?.focus();
+      pendingFocusFieldRef.current = null;
+    }
+  }, [editingFields]);
+
+  // Focus the "A few more details" heading after a MANUAL reveal only (never
+  // on the automatic reveal-on-required-complete above) — see
+  // `manualOpenRef`'s comment.
+  useEffect(() => {
+    if (showOptional && manualOpenRef.current) {
+      materialHeadingRef.current?.focus();
+      manualOpenRef.current = false;
+    }
+  }, [showOptional]);
+
+  function markTouched(field: string) {
+    setTouchedFields((prev) => (prev.has(field) ? prev : new Set(prev).add(field)));
+  }
+
   function draftFor(field: string): string {
     if (field in values) return values[field] ?? "";
     const bag = profile as Record<string, { value?: unknown } | undefined>;
@@ -281,6 +388,7 @@ export default function ProfileQuestionnaire({
   }
 
   function startEdit(field: string) {
+    pendingFocusFieldRef.current = field;
     setEditingFields((prev) => {
       const next = new Set(prev);
       next.add(field);
@@ -413,6 +521,25 @@ export default function ProfileQuestionnaire({
     ? "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas"
     : "font-mono text-[11px] uppercase tracking-eyebrow text-slate-550";
 
+  // A required-field marker, in words rather than a bare red asterisk: an
+  // asterisk-only cue needs its own screen-reader affordance anyway, and a
+  // small inline red glyph directly on canvas is exactly the pattern
+  // scripts/design/contrast-check.mjs's advisory table flags "DO NOT USE"
+  // (fails AA at this size/weight). "Required" in the existing safe
+  // structure-on-canvas eyebrow token sidesteps both problems.
+  const requiredMarkerClass = design
+    ? "ml-1 font-mono text-[10px] uppercase tracking-eyebrow text-structure-on-canvas"
+    : "ml-1 font-mono text-[10px] uppercase tracking-eyebrow text-slate-550";
+
+  // Sub-group heading inside "A few more details" (Company & product /
+  // Financials) — same eyebrow treatment as the top-level section headings.
+  const groupHeadingClass = sectionHeadingClass;
+
+  // Reset the browser's default fieldset/legend chrome (border, padding,
+  // margin) so the boolean_text field's <fieldset> matches every other
+  // field's plain flex-col wrapper exactly.
+  const fieldsetResetClass = "m-0 min-w-0 border-0 p-0";
+
   // CON-02: `error` is a fill/border-only semantic role — never bare inline
   // text color (that pairing fails AA and is explicitly flagged "DO NOT USE"
   // in scripts/design/contrast-check.mjs's advisory table). The message text
@@ -434,15 +561,18 @@ export default function ProfileQuestionnaire({
 
   // ---- field rendering ----
 
-  function renderField(meta: ProfileFieldMeta) {
+  function renderField(meta: ProfileFieldMeta, spanClass = "") {
     const provided = isFieldProvided(profile, meta.field) && !editingFields.has(meta.field);
+    const required = meta.requirement === "required";
+    const wrapClass = spanClass ? `${fieldWrapClass} ${spanClass}` : fieldWrapClass;
+    const requiredMarker = required ? <span className={requiredMarkerClass}>Required</span> : null;
 
     if (provided) {
       const bag = profile as Record<string, { value: unknown }>;
       const raw = bag[meta.field].value;
       const display = Array.isArray(raw) ? raw.join(", ") : String(raw);
       return (
-        <div key={meta.field} className={providedRowClass}>
+        <div key={meta.field} className={`${providedRowClass} ${spanClass}`.trim()}>
           <div className="min-w-0">
             <span className={providedLabelClass}>{meta.label}</span>
             <p className={providedValueClass}>{display}</p>
@@ -452,6 +582,7 @@ export default function ProfileQuestionnaire({
             onClick={() => startEdit(meta.field)}
             className={editButtonClass}
             disabled={disabled}
+            aria-label={`Edit ${meta.label}`}
           >
             Edit
           </button>
@@ -463,16 +594,22 @@ export default function ProfileQuestionnaire({
 
     if (meta.inputType === "single_select" || meta.inputType === "range_select") {
       return (
-        <div key={meta.field} className={fieldWrapClass}>
+        <div key={meta.field} className={wrapClass}>
           <label htmlFor={`pq-${meta.field}`} className={fieldLabelClass}>
             {meta.label}
+            {requiredMarker}
           </label>
           <select
             id={`pq-${meta.field}`}
+            ref={(el) => {
+              fieldRefs.current[meta.field] = el;
+            }}
             value={value}
             disabled={disabled}
+            aria-required={required}
             onChange={(e) => {
               commitField(meta.field, e.target.value, "user_stated");
+              markTouched(meta.field);
               stopEdit(meta.field);
             }}
             className={selectClass}
@@ -490,21 +627,27 @@ export default function ProfileQuestionnaire({
 
     if (meta.inputType === "integer") {
       return (
-        <div key={meta.field} className={fieldWrapClass}>
+        <div key={meta.field} className={wrapClass}>
           <label htmlFor={`pq-${meta.field}`} className={fieldLabelClass}>
             {meta.label}
+            {requiredMarker}
           </label>
           <input
             id={`pq-${meta.field}`}
+            ref={(el) => {
+              fieldRefs.current[meta.field] = el;
+            }}
             type="number"
             min={0}
             step={1}
             inputMode="numeric"
             value={value}
             disabled={disabled}
+            aria-required={required}
             onChange={(e) => setValues((v) => ({ ...v, [meta.field]: e.target.value }))}
             onBlur={(e) => {
               commitField(meta.field, e.target.value, "user_stated");
+              markTouched(meta.field);
               stopEdit(meta.field);
             }}
             className={textInputClass}
@@ -522,17 +665,28 @@ export default function ProfileQuestionnaire({
         const combined =
           nextChoice === "Yes" ? (nextDetail.trim() ? `Yes — ${nextDetail.trim()}` : "Yes") : nextChoice === "No" ? "No" : "";
         commitField(meta.field, combined, "user_stated");
+        markTouched(meta.field);
         if (combined.length > 0) stopEdit(meta.field);
       };
       return (
-        <div key={meta.field} className={fieldWrapClass}>
-          <span className={fieldLabelClass}>{meta.label}</span>
+        <fieldset key={meta.field} className={`${wrapClass} ${fieldsetResetClass}`}>
+          <legend className={`${fieldLabelClass} p-0`}>
+            {meta.label}
+            {requiredMarker}
+          </legend>
           <div className="mt-1 flex gap-4">
-            {["Yes", "No"].map((opt) => (
+            {["Yes", "No"].map((opt, i) => (
               <label key={opt} className={radioLabelClass}>
                 <input
                   type="radio"
                   name={`pq-${meta.field}`}
+                  ref={
+                    i === 0
+                      ? (el) => {
+                          fieldRefs.current[meta.field] = el;
+                        }
+                      : undefined
+                  }
                   checked={choice === opt}
                   disabled={disabled}
                   onChange={() => {
@@ -549,6 +703,7 @@ export default function ProfileQuestionnaire({
             <input
               type="text"
               placeholder="Briefly describe (optional)"
+              aria-label={`${meta.label} — details`}
               value={detail}
               disabled={disabled}
               onChange={(e) => setValues((v) => ({ ...v, [detailKey]: e.target.value }))}
@@ -556,36 +711,51 @@ export default function ProfileQuestionnaire({
               className={`${textInputClass} mt-2`}
             />
           )}
-        </div>
+        </fieldset>
       );
     }
 
     // free_text: raw_text, industry, technology, location, use_of_funds, target_customers
     const isBig = meta.field === "raw_text";
+    const touched = touchedFields.has(meta.field);
+    const errorMsg = fieldValidationMessage(meta, false, touched);
+    const errorId = `pq-${meta.field}-error`;
     return (
-      <div key={meta.field} className={fieldWrapClass}>
+      <div key={meta.field} className={wrapClass}>
         <label htmlFor={`pq-${meta.field}`} className={fieldLabelClass}>
           {meta.label}
+          {requiredMarker}
         </label>
         <textarea
           id={`pq-${meta.field}`}
+          ref={(el) => {
+            fieldRefs.current[meta.field] = el;
+          }}
           rows={isBig ? 5 : 2}
           value={value}
           disabled={disabled}
           placeholder={isBig ? "What you build, who it's for, and how much you need." : undefined}
+          aria-required={required}
+          aria-invalid={Boolean(errorMsg)}
+          aria-describedby={errorMsg ? errorId : undefined}
           onChange={(e) => setValues((v) => ({ ...v, [meta.field]: e.target.value }))}
           onBlur={(e) => {
             commitField(meta.field, e.target.value, "user_stated");
+            markTouched(meta.field);
             if (e.target.value.trim().length > 0) stopEdit(meta.field);
           }}
           className={isBig ? textareaBigClass : textareaSmallClass}
         />
+        {errorMsg && (
+          <p id={errorId} role="alert" className={`mt-1 ${errorTextClass}`}>
+            {errorMsg}
+          </p>
+        )}
       </div>
     );
   }
 
   const requiredFields = PROFILE_FIELD_META.filter((m) => m.requirement === "required");
-  const materialFields = PROFILE_FIELD_META.filter((m) => m.requirement === "material");
 
   return (
     <div>
@@ -596,6 +766,7 @@ export default function ProfileQuestionnaire({
           type="button"
           onClick={() => setPasteOpen((o) => !o)}
           aria-expanded={pasteOpen}
+          aria-controls="pq-paste-panel"
           disabled={disabled}
           className={pasteTriggerClass}
         >
@@ -603,7 +774,7 @@ export default function ProfileQuestionnaire({
         </button>
 
         {pasteOpen && (
-          <div className={pastePanelClass}>
+          <div id="pq-paste-panel" className={pastePanelClass}>
             <label htmlFor="pq-paste" className={fieldLabelClass}>
               Paste your company description
             </label>
@@ -624,37 +795,77 @@ export default function ProfileQuestionnaire({
               >
                 {extracting ? "Reading…" : "Autofill fields"}
               </button>
-              {extractError && <span className={errorTextClass}>{extractError}</span>}
+              {extractError && (
+                <span role="alert" className={errorTextClass}>
+                  {extractError}
+                </span>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Required fields — the search needs these to route at all. */}
+      {/* Required fields — the search needs these to route at all. Grid:
+          single column on mobile (each field always full-width), two
+          columns from `sm:` up, with the description box and any other
+          "wide" field spanning both. */}
       <div className="mt-5">
-        <span className={sectionHeadingClass}>Tell us about your company</span>
-        <div className="mt-3 flex flex-col gap-4">{requiredFields.map(renderField)}</div>
+        <h2 className={sectionHeadingClass}>Tell us about your company</h2>
+        <p aria-live="polite" className={introClass}>
+          {requiredProgressText(requiredFields.length, requiredGaps.length)}
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {requiredFields.map((m) => renderField(m, isWideField(m.field) ? "sm:col-span-2" : ""))}
+        </div>
       </div>
 
       {/* Optional-but-material fields — progressive disclosure: revealed once
-          the required set is complete, or on demand via the toggle. */}
+          the required set is complete, or on demand via the toggle. Grouped
+          under two founder-facing headings (Company & product / Financials)
+          so the list reads as organized sections, not one long form. */}
       <div className="mt-5 border-t border-structure-on-canvas pt-4">
         {!showOptional ? (
           <button
             type="button"
-            onClick={() => setShowOptional(true)}
+            onClick={() => {
+              manualOpenRef.current = true;
+              setShowOptional(true);
+            }}
             disabled={disabled}
+            aria-expanded={false}
+            aria-controls="pq-material-fields"
             className={secondaryButtonClass}
           >
             + Add optional details (improves matches)
           </button>
         ) : (
-          <div>
-            <span className={sectionHeadingClass}>A few more details (optional)</span>
+          <div id="pq-material-fields">
+            <h2
+              ref={materialHeadingRef}
+              tabIndex={-1}
+              className={`${sectionHeadingClass} rounded-sm focus:outline-none focus:ring-2 focus:ring-structure-on-canvas`}
+            >
+              A few more details (optional)
+            </h2>
             <p className={introClass}>
               None of these are required — but each one changes which programs match.
             </p>
-            <div className="mt-3 flex flex-col gap-4">{materialFields.map(renderField)}</div>
+            <div className="mt-4 flex flex-col gap-5">
+              {MATERIAL_FIELD_GROUPS.map((group) => {
+                const fields = group.fields
+                  .map((f) => PROFILE_FIELD_META_BY_KEY[f])
+                  .filter((m): m is ProfileFieldMeta => Boolean(m));
+                if (fields.length === 0) return null;
+                return (
+                  <div key={group.heading}>
+                    <h3 className={groupHeadingClass}>{group.heading}</h3>
+                    <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {fields.map((m) => renderField(m, isWideField(m.field) ? "sm:col-span-2" : ""))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
