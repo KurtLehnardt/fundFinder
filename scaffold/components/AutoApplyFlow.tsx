@@ -11,24 +11,45 @@ import { useAuth } from "@/components/AuthProvider";
 import { useBilling } from "@/components/BillingProvider";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import { useEntitlements } from "@/lib/entitlements/useEntitlements";
+import ApplicationChecklist, { REQUIREMENTS, type RequirementKey } from "@/components/ApplicationChecklist";
+import type { Opportunity } from "@/lib/types";
 
 /**
- * R6 — assisted-apply DEMO flow (behind the default-off `r6_auto_apply` flag).
+ * R6 / D6 — assisted-apply Application Assistant (behind the default-off
+ * `r6_auto_apply` flag).
  *
  * A single, walkable modal stepper that shows founders what pre-approval for
- * assisted application actually requires:
+ * assisted application actually requires, plus (D6) an honest, per-opportunity
+ * PREPARATION CHECKLIST when a specific `opportunity` is passed in:
  *   1. Sign in (R9)      — the same sign-in gate the rest of the app uses.
  *   2. Requirements      — record the four SAM.gov facts + a satisfied/not
  *                          checklist; "Submit for approval" is disabled until
- *                          all four are satisfied.
+ *                          all four are satisfied. When `opportunity` is
+ *                          provided, this step ALSO renders that opportunity's
+ *                          key dates / documents / questions / next steps
+ *                          (see components/ApplicationChecklist.tsx) above the
+ *                          registration checklist.
  *   3. Admin review      — an honest "pending" screen. Nothing was submitted.
  *
  * This is a PREVIEW / STUB, and it is honest about it (R7.7 / §11):
  *   - It NEVER submits an application, and says so on every step.
+ *   - It NEVER claims to have submitted anything or won an award.
+ *   - It NEVER fabricates founder facts or an eligibility verdict — the
+ *     per-opportunity checklist only reflects data already on the
+ *     `Opportunity` record (title, agency, dates, the agency's own
+ *     eligibility prose) or generic, clearly-labeled "typical" guidance that
+ *     tells the founder to confirm specifics on the official listing.
  *   - No payment is taken, no stats are invented, no guarantee or federal
  *     affiliation is implied.
  *   - "Pro" is framing only, via the client-only `useEntitlements` stub, which
  *     gates NOTHING server-side. The walkthrough proceeds regardless.
+ *
+ * `opportunity` is OPTIONAL and additive: when the caller doesn't pass one
+ * (today's only call site, components/OpportunityCard.tsx, doesn't — wiring
+ * that up is out of D6's file scope), this component renders exactly as it
+ * did before D6 — the per-opportunity checklist section simply doesn't
+ * render. Passing `opportunity={m.opportunity}` from OpportunityCard is the
+ * trivial follow-up that lights this up end-to-end.
  *
  * Reuse note: the four-fact editor is the SAME form as SettingsPanel, reused
  * INLINE here rather than by rendering <SettingsPanel/> nested. SettingsPanel
@@ -43,35 +64,18 @@ import { useEntitlements } from "@/lib/entitlements/useEntitlements";
  */
 
 type Step = "signin" | "requirements" | "review";
-type RequirementKey = "sam" | "uei" | "aor" | "ebiz";
-
-const REQUIREMENTS: Array<{ key: RequirementKey; label: string; detail: string }> = [
-  {
-    key: "sam",
-    label: "Active SAM.gov registration",
-    detail: "The federal government's vendor registry — most awards can't be paid out without it.",
-  },
-  {
-    key: "uei",
-    label: "UEI (Unique Entity Identifier)",
-    detail: "Your organization's federal ID number, issued when you register in SAM.gov.",
-  },
-  {
-    key: "aor",
-    label: "Authorized AOR (Authorized Organization Representative)",
-    detail: "The person SAM.gov has on file as allowed to submit and sign applications for your organization.",
-  },
-  {
-    key: "ebiz",
-    label: "E-Biz POC delegation",
-    detail:
-      "Your Electronic Business Point of Contact has delegated AOR authority in SAM.gov — required before an AOR can act.",
-  },
-];
 
 const STEP_ORDER: Step[] = ["signin", "requirements", "review"];
 
-export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
+export default function AutoApplyFlow({
+  onClose,
+  opportunity,
+}: {
+  onClose: () => void;
+  /** D6: the selected opportunity to build a per-opportunity checklist for.
+   *  Optional — omit for the pre-D6 generic registration-only flow. */
+  opportunity?: Opportunity;
+}) {
   // Design revamp: USWDS 60/30/10 restyle is the DEFAULT on this A/B branch
   // (previously gated behind r7_design).
   const design = true;
@@ -283,7 +287,17 @@ export default function AutoApplyFlow({ onClose }: { onClose: () => void }) {
               place before you can submit for approval. Nothing here submits an application.
             </p>
 
-            <ul className="mt-4 space-y-3">
+            {/* D6: per-opportunity preparation checklist — only renders when the
+                caller passes a selected opportunity (see the `opportunity` prop
+                doc above). Registration status feeds in from the same
+                `satisfied` map the list below renders, so the two sections never
+                disagree about what's on file. */}
+            {opportunity && (
+              <ApplicationChecklist opportunity={opportunity} allRegistrationsSatisfied={allSatisfied} />
+            )}
+
+            <h4 className={legendClass + " mt-6"}>Registrations on file</h4>
+            <ul className="mt-2 space-y-3">
               {REQUIREMENTS.map((r) => (
                 <li key={r.key} className="flex gap-3">
                   <span className={satisfied[r.key] ? metClass : mutedClass} aria-hidden="true">
