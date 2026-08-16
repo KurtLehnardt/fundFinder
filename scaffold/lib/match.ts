@@ -15,6 +15,7 @@ import { isFlagEnabled } from "./flags";
 // buildOpportunityMap); see lib/redirects/utahSbaPrograms.ts for the curated
 // list and the (pure, hermetic) guarantee it makes.
 import { ensureRealRedirects } from "./redirects/utahSbaPrograms";
+import { deriveEnrichmentSignal, enrichmentQueryTerms, boostForOpportunity } from "./retrieval/enrich";
 
 /**
  * CALIBRATION KNOBS — tune these against all five test cases before touching UI.
@@ -237,7 +238,17 @@ export async function buildOpportunityMap(
   const { profile, followUps } = await d.extractProfile(description, meter, signal);
   step({ key: "profile", label: "Understood your company", pct: 18 });
 
-  // 3. Semantic expansion — embed the founder profile plus expanded gov terms.
+  // B2 (profile-enriched ranking) — deterministic, flag-gated (default OFF).
+  // When on, distill the structured StartupProfile fields (size, funding stage,
+  // use-of-funds mechanism, industry/NAICS) into a retrieval signal that (a)
+  // folds government-vocabulary terms into the query-embedding text below and
+  // (b) drives a non-negative re-rank boost over the floor-clearing candidates.
+  // When off, `enrich` is undefined and every line below is byte-for-byte the
+  // pre-B2 behavior, so the calibration/quota guarantees hold unchanged.
+  const enrich = isFlagEnabled("b2_enriched_ranking") ? deriveEnrichmentSignal(profile) : undefined;
+
+  // 3. Semantic expansion — embed the founder profile plus expanded gov terms
+  //    (and, under B2, the enrichment-derived mechanism/size vocabulary).
   const queryText = [
     profile.description,
     profile.technology,
@@ -245,6 +256,7 @@ export async function buildOpportunityMap(
     profile.rdActivities,
     profile.targetCustomers,
     (profile.expandedTerms ?? []).join(", "),
+    enrich ? enrichmentQueryTerms(enrich).join(", ") : "",
   ].filter(Boolean).join("\n");
   const queryVec = await d.embed(queryText, meter, signal);
   step({ key: "embed", label: `Searching ${d.corpus.length} programs`, pct: 32 });
@@ -262,10 +274,18 @@ export async function buildOpportunityMap(
   // present instrument type REACHABLE by the scorer without displacing any
   // strong grant. Fully deterministic: stable sort by cosine desc, tie-broken
   // by opp id, so the union order is stable across runs.
+  // B2: `sim` is the RAW cosine (still the ONLY thing the candidate floor gates,
+  // so enrichment can never admit a below-floor opp); `rank` is `sim` plus the
+  // deterministic non-negative enrichment boost (0 when the flag is off). Sorting
+  // by `rank` re-orders and re-selects among floor-clearers only.
   const floorCleared = d.corpus
-    .map((o) => ({ o, sim: o.embedding ? cosine(queryVec, o.embedding) : 0 }))
+    .map((o) => {
+      const sim = o.embedding ? cosine(queryVec, o.embedding) : 0;
+      const rank = enrich ? sim + boostForOpportunity(enrich, o) : sim;
+      return { o, sim, rank };
+    })
     .filter((x) => x.sim >= CALIBRATION.candidateFloor)
-    .sort((a, b) => (b.sim - a.sim) || (a.o.id < b.o.id ? -1 : a.o.id > b.o.id ? 1 : 0));
+    .sort((a, b) => (b.rank - a.rank) || (a.o.id < b.o.id ? -1 : a.o.id > b.o.id ? 1 : 0));
 
   // Base set: the UNCHANGED global top-N (preserves every strong grant that
   // already qualified — nothing is discarded to make room for the quota).

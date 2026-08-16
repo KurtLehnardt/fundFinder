@@ -47,6 +47,8 @@ describe("FLAG_REGISTRY", () => {
       "r4b_cost_debug",
       "left_sidebar",
       "g6_s2s_submission",
+      "b2_enriched_ranking",
+      "c1b_type_groups",
     ];
     assert.deepEqual(Object.keys(FLAG_REGISTRY).sort(), expected.slice().sort());
   });
