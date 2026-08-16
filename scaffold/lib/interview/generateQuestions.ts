@@ -1,6 +1,12 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
+import {
+  MATERIAL_PROFILE_FIELDS,
+  isFieldProvided,
+  type CompanyProfile,
+  type ProfileFieldMeta,
+} from "../contracts/companyProfile";
 import { DEFAULT_MODEL_ROUTING } from "../contracts/modelRouting";
 import { loadPrompt, recordUsage, type PromptUsage } from "../prompts";
 
@@ -177,6 +183,16 @@ export interface GenerateQuestionsOptions {
    * Production callers omit this and get the real client.
    */
   client?: InterviewChatClient;
+  /**
+   * The founder's known profile so far (B1a gap interview). When provided, the
+   * interview runs gap-first:
+   *   - if no MATERIAL field is missing, it returns ZERO questions WITHOUT
+   *     calling the model (a fully-filled profile asks nothing); and
+   *   - any question that re-asks an already-provided field is pruned from the
+   *     result, so a provided field is never re-asked.
+   * Omitted (the default) preserves the original description-only behavior.
+   */
+  profile?: Partial<CompanyProfile>;
 }
 
 /**
@@ -268,6 +284,48 @@ export function normalize(raw: RawQuestion[], maxQuestions: number): InterviewQu
   });
 }
 
+// --- Gap detection (B1a) ---------------------------------------------------
+//
+// The R1 interview is a GAP interview: ask only the material fields the profile
+// is still missing, and never re-ask a field it already provides. The material
+// set + the "provided" definition both live on the CON-01 contract
+// (`MATERIAL_PROFILE_FIELDS`, `isFieldProvided`) so there is a single source of
+// truth; this module just consumes them.
+
+/**
+ * A material `CompanyProfile` field the interview still needs. Returned by
+ * {@link detectGaps} in metadata order (required first, then material).
+ */
+export type FieldGap = ProfileFieldMeta;
+
+/**
+ * The material fields `profile` is still missing — required + material fields
+ * whose value `isFieldProvided` reports as absent/empty. A profile that already
+ * provides every material field yields `[]` (which is what makes a fully-filled
+ * profile ask ZERO questions). Never includes an already-provided field.
+ */
+export function detectGaps(profile: Partial<CompanyProfile>): FieldGap[] {
+  return MATERIAL_PROFILE_FIELDS.filter((m) => !isFieldProvided(profile, m.field));
+}
+
+/**
+ * Drop any generated question that re-asks a field the profile already
+ * provides. Questions with no field mapping (`maps_to_profile_field === null`)
+ * or mapping to a still-missing field are kept. This is the second half of the
+ * "never re-ask a provided field" guarantee — it prunes what the model returned
+ * even when the model ignored the gap set.
+ */
+export function pruneAnsweredQuestions(
+  questions: InterviewQuestion[],
+  profile: Partial<CompanyProfile>,
+): InterviewQuestion[] {
+  return questions.filter((q) => {
+    const field = q.maps_to_profile_field;
+    if (field === null) return true;
+    return !isFieldProvided(profile, field);
+  });
+}
+
 // --- Entry point -----------------------------------------------------------
 
 export class InterviewGenerationError extends Error {
@@ -292,6 +350,14 @@ export async function generateQuestions(
   const text = description?.trim() ?? "";
   if (text.length === 0) {
     throw new InterviewGenerationError("description is empty");
+  }
+
+  // Gap-first: with a known profile and no material gaps left, ask nothing and
+  // never touch the model (or require an API key). This is the fully-filled →
+  // ZERO-questions guarantee.
+  const profile = opts.profile;
+  if (profile && detectGaps(profile).length === 0) {
+    return [];
   }
 
   const model = opts.model ?? INTERVIEW_MODEL;
@@ -351,5 +417,7 @@ export async function generateQuestions(
   }
 
   const questions = parsed.data.questions ?? [];
-  return normalize(questions, maxQuestions);
+  const normalized = normalize(questions, maxQuestions);
+  // With a known profile, prune any question that re-asks a provided field.
+  return profile ? pruneAnsweredQuestions(normalized, profile) : normalized;
 }
