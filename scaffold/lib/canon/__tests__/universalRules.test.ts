@@ -75,4 +75,61 @@ describe("universalRulesForOpportunity", () => {
     assert.equal(rules[0].id, "universal-sam-registration");
     assert.equal(rules[0].category, "registration");
   });
+
+  // --- kind-scoped overlay (loan / scholarship / procurement) ---------------
+
+  test("unknown kind → financial-assistance SAM gate (back-compat with legacy callers)", () => {
+    const rules = universalRulesForOpportunity({ title: "Some Grant", program: "Some Grant" });
+    assert.deepEqual(rules.map((r) => r.id), ["universal-sam-registration"]);
+  });
+
+  test("a grant/rd/assistance kind → the 2 CFR financial-assistance SAM gate", () => {
+    for (const kind of ["grant", "rd", "assistance"] as const) {
+      const rules = universalRulesForOpportunity({ title: "X", program: "X", kind });
+      assert.ok(
+        rules.some((r) => r.id === "universal-sam-registration"),
+        `${kind} should get the financial-assistance SAM gate`,
+      );
+      assert.ok(!rules.some((r) => r.id === "universal-procurement-registration"), `${kind} is not procurement`);
+    }
+  });
+
+  test("a procurement opportunity → the FAR SAM gate (not the 2 CFR one)", () => {
+    const rules = universalRulesForOpportunity({ title: "IT Services", program: "IT Services", kind: "procurement" });
+    assert.deepEqual(rules.map((r) => r.id), ["universal-procurement-registration"]);
+    assert.equal(rules[0].category, "registration");
+    assert.equal(rules[0].gate_kind, "conditional");
+    assert.match(rules[0].citation.source_url, /52\.204-7/);
+  });
+
+  test("a loan opportunity → SAM gate + the SBA for-profit entity gate", () => {
+    const rules = universalRulesForOpportunity({ title: "SBA 7(a)", program: "SBA 7(a)", kind: "loan" });
+    const ids = rules.map((r) => r.id).sort();
+    assert.deepEqual(ids, ["universal-loan-for-profit", "universal-sam-registration"]);
+    const forProfit = rules.find((r) => r.id === "universal-loan-for-profit")!;
+    assert.equal(forProfit.category, "entity_type");
+    assert.equal(forProfit.gate_kind, "categorical");
+    assert.match(forProfit.citation.source_url, /13\/120\.100/);
+  });
+
+  test("a scholarship opportunity → SAM gate + the individual-applicant entity gate", () => {
+    const rules = universalRulesForOpportunity({ title: "Fellowship", program: "Fellowship", kind: "scholarship" });
+    const ids = rules.map((r) => r.id).sort();
+    assert.deepEqual(ids, ["universal-sam-registration", "universal-scholarship-individual"]);
+    const individual = rules.find((r) => r.id === "universal-scholarship-individual")!;
+    assert.equal(individual.category, "entity_type");
+    assert.equal(individual.gate_kind, "categorical");
+    assert.match(individual.citation.source_url, /34\/75\.62/);
+  });
+
+  test("every kind-scoped rule is authoritative-cited but model_inferred=false (R8.4: unreviewed → may not exclude)", () => {
+    for (const kind of ["loan", "scholarship", "procurement"] as const) {
+      const rules = universalRulesForOpportunity({ title: "X", program: "X", kind });
+      for (const r of rules) {
+        assert.equal(r.provenance, "authoritative");
+        assert.equal(r.model_inferred, false);
+        assert.ok(r.citation.source_url && r.citation.quote, `${r.id} must carry url + verbatim quote (§11)`);
+      }
+    }
+  });
 });

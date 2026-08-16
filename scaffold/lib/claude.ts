@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { StartupProfile, Opportunity, Match, CriterionCheck, Tier } from "./types";
+import type { EligibilityBucket } from "./contracts/eligibilityDetermination";
 import { loadPrompt } from "./prompts";
 import type { CostMeter } from "./metering/meter";
 
@@ -309,4 +310,104 @@ export async function explainWeakField(profile: StartupProfile, meter?: CostMete
 
   const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
   return parseJson<{ headline: string; reasoning: string; redirects: Array<{ label: string; why: string }> }>(text);
+}
+
+// ---------------------------------------------------------------------------
+// ONE ELIGIBILITY VOICE — reconcile the model narrative to the deterministic
+// determination (§1 #5 / R8.4). Pure + dependency-free (no SDK, no network).
+// ---------------------------------------------------------------------------
+
+/**
+ * The deterministic `EligibilityDetermination` produced by
+ * `lib/eligibility/screen.ts` is the SINGLE SOURCE OF TRUTH for whether a
+ * founder is ruled out. The model's `whyIneligible` narrative is a SUBORDINATE,
+ * hedged read of "possible concerns" (see the `explainMatches` prompt rule 1:
+ * "You are NOT determining eligibility"). This function enforces that at the
+ * boundary: the narrative may echo a definitive exclusion ONLY when the engine's
+ * own bucket is `excluded`. In every other case (eligible / conditional /
+ * unknown / no determination) a definitive-exclusion assertion is NEUTRALIZED —
+ * so the UI can never tell a founder they are ineligible on the strength of an
+ * uncited model sentence the engine never agreed with (R8.4, the worst single
+ * failure this product can make).
+ *
+ * Kept SDK-free so it is unit-testable and safe to call from the render layer.
+ */
+export type NarrativeReconciliation = {
+  /** The narrative safe to render — never asserts a determination the engine didn't make. */
+  text: string;
+  /** True when the raw narrative over-asserted an exclusion the engine did not make. */
+  reconciled: boolean;
+};
+
+/**
+ * Definitive (NON-hedged) exclusion assertions the model must not make on its
+ * own authority. Hedged forms ("you may not be eligible", "verify with the
+ * program officer", "could disqualify") are deliberately NOT matched — those are
+ * the allowed, subordinate voice. Matching is case-insensitive.
+ */
+const DEFINITIVE_EXCLUSION =
+  /\b(?:you(?:'re| are)\s+(?:currently\s+)?(?:ineligible|not eligible|excluded|disqualified|barred)|you\s+(?:do|does)\s+not\s+qualify|you\s+don'?t\s+qualify|your\s+company\s+is\s+(?:ineligible|not eligible|excluded|disqualified)|(?:this|the)\s+(?:program|opportunity|solicitation)\s+(?:excludes|disqualifies|bars)\s+you|renders?\s+you\s+ineligible|makes?\s+you\s+ineligible)\b/i;
+
+/** Determination-free caution used when a definitive assertion can't be softened cleanly. */
+const RECONCILED_FALLBACK =
+  "These are concerns to verify with the program officer — not a determination that you are ruled out. Your eligibility status is shown by the screening result above.";
+
+/** Soften definitive-exclusion phrasing into the hedged, subordinate voice. */
+function softenDefinitiveExclusion(text: string): string {
+  return text
+    .replace(/\byou are ineligible\b/gi, "you may have an eligibility concern")
+    .replace(/\byou're ineligible\b/gi, "you may have an eligibility concern")
+    .replace(/\byou are not eligible\b/gi, "you may not be eligible")
+    .replace(/\byou're not eligible\b/gi, "you may not be eligible")
+    .replace(/\byou are excluded\b/gi, "you may face an exclusion concern")
+    .replace(/\byou're excluded\b/gi, "you may face an exclusion concern")
+    .replace(/\byou are disqualified\b/gi, "you may have a disqualifying factor to verify")
+    .replace(/\byou're disqualified\b/gi, "you may have a disqualifying factor to verify")
+    .replace(/\byou are barred\b/gi, "you may be restricted")
+    .replace(/\byou're barred\b/gi, "you may be restricted")
+    .replace(/\byou do not qualify\b/gi, "you may not qualify")
+    .replace(/\byou does not qualify\b/gi, "you may not qualify")
+    .replace(/\byou don't qualify\b/gi, "you may not qualify")
+    .replace(/\byou dont qualify\b/gi, "you may not qualify")
+    .replace(/\byour company is ineligible\b/gi, "your company may have an eligibility concern")
+    .replace(/\byour company is not eligible\b/gi, "your company may not be eligible")
+    .replace(/\byour company is excluded\b/gi, "your company may face an exclusion concern")
+    .replace(/\byour company is disqualified\b/gi, "your company may have a disqualifying factor to verify")
+    .replace(/\b(this|the) (program|opportunity|solicitation) excludes you\b/gi, "$1 $2 may exclude you")
+    .replace(/\b(this|the) (program|opportunity|solicitation) disqualifies you\b/gi, "$1 $2 may disqualify you")
+    .replace(/\b(this|the) (program|opportunity|solicitation) bars you\b/gi, "$1 $2 may restrict you")
+    .replace(/\brenders you ineligible\b/gi, "may affect your eligibility")
+    .replace(/\brender you ineligible\b/gi, "may affect your eligibility")
+    .replace(/\bmakes you ineligible\b/gi, "may affect your eligibility")
+    .replace(/\bmake you ineligible\b/gi, "may affect your eligibility");
+}
+
+/**
+ * Reconcile a model `whyIneligible` narrative against the deterministic bucket.
+ *
+ * - engine bucket `excluded` → the exclusion is the engine's OWN determination,
+ *   so the narrative may state it: returned unchanged.
+ * - otherwise (eligible / conditional / unknown / no determination) → any
+ *   definitive-exclusion assertion is softened to the hedged voice; if a
+ *   definitive assertion still survives softening, the whole narrative is
+ *   replaced with a determination-free caution. Narratives that are already
+ *   hedged (or say nothing definitive) pass through untouched.
+ */
+export function reconcileIneligibilityNarrative(
+  narrative: string | undefined,
+  determination: { bucket: EligibilityBucket } | undefined,
+): NarrativeReconciliation {
+  const raw = (narrative ?? "").trim();
+  // The engine itself ruled the founder out → the narrative may echo it.
+  if (determination?.bucket === "excluded") return { text: raw, reconciled: false };
+  if (raw.length === 0) return { text: raw, reconciled: false };
+  // No definitive over-assertion → already the subordinate/hedged voice.
+  if (!DEFINITIVE_EXCLUSION.test(raw)) return { text: raw, reconciled: false };
+
+  const softened = softenDefinitiveExclusion(raw);
+  // Defense in depth: if any definitive assertion survives the softening table,
+  // fall back to the canonical determination-free caution so the narrative can
+  // NEVER assert an exclusion the engine did not make.
+  const text = DEFINITIVE_EXCLUSION.test(softened) ? RECONCILED_FALLBACK : softened;
+  return { text, reconciled: true };
 }

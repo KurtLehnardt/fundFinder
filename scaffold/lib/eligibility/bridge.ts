@@ -111,11 +111,17 @@ export function toCompanyProfile(sp: StartupProfile, known?: KnownCompanyFacts):
  * `eligibility` string (no structured, predicated rules), so per-opp rules are
  * empty and the authoritative universal overlay drives the buckets. That is the
  * expected ELG-04 behavior for the v1 corpus.
+ *
+ * `kind` is passed through so the engine can apply the kind-scoped universal
+ * gates (loan → for-profit, scholarship → individual, procurement → FAR SAM
+ * registration); these render `conditionally_eligible`/`unknown` for the v1
+ * corpus, never `excluded` (the gates are authoritative-cited but unreviewed).
  */
 export function toScreenableOpportunity(opp: Opportunity): ScreenableOpportunity {
   return {
     id: opp.id,
     title: opp.title ?? opp.program,
     program: opp.program,
+    kind: opp.kind,
   };
 }

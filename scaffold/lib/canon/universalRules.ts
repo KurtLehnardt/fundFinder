@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EligibilityRuleCategorySchema } from "../contracts/opportunity";
+import type { OpportunityKind } from "../contracts/opportunity";
 import { CitedCitationSchema } from "./rules";
 import type { CanonOpportunity } from "./CanonOpportunity";
 
@@ -33,9 +34,44 @@ import type { CanonOpportunity } from "./CanonOpportunity";
  * Registration is a CONDITIONAL gate (a step with lead time), never an exclusion.
  */
 
-/** Which opportunities a universal rule applies to. */
-export const UniversalApplicabilitySchema = z.enum(["all", "sbir_sttr"]);
+/**
+ * Which opportunities a universal rule applies to. Scopes are `kind`-aware so the
+ * overlay handles the full instrument spread (grants, R&D, assistance, loans,
+ * scholarships, procurement), not just grants:
+ *  - `all`                  — every opportunity, regardless of kind.
+ *  - `financial_assistance` — grant/rd/assistance/loan/scholarship (the federal
+ *                             financial-assistance instruments governed by 2 CFR),
+ *                             AND opportunities whose kind is unknown (back-compat:
+ *                             the v1 corpus is grants and legacy callers pass only
+ *                             title/program). NOT procurement — contracts are
+ *                             governed by the FAR, which carries its own SAM rule.
+ *  - `sbir_sttr`            — SBIR/STTR programs (detected from title/program).
+ *  - `procurement`          — federal contract opportunities (kind `procurement`).
+ *  - `loan`                 — repayable-capital programs (kind `loan`).
+ *  - `scholarship`          — individual educational awards (kind `scholarship`).
+ */
+export const UniversalApplicabilitySchema = z.enum([
+  "all",
+  "financial_assistance",
+  "sbir_sttr",
+  "procurement",
+  "loan",
+  "scholarship",
+]);
 export type UniversalApplicability = z.infer<typeof UniversalApplicabilitySchema>;
+
+/**
+ * Instrument kinds that ARE federal financial assistance (2 CFR world), for the
+ * `financial_assistance` scope. Procurement (a FAR contract) is deliberately
+ * excluded — it gets the FAR-cited SAM rule instead of the 2 CFR one.
+ */
+const FINANCIAL_ASSISTANCE_KINDS: ReadonlySet<OpportunityKind> = new Set<OpportunityKind>([
+  "grant",
+  "rd",
+  "assistance",
+  "loan",
+  "scholarship",
+]);
 
 /**
  * How ELG-01 renders the gate:
@@ -74,17 +110,63 @@ export const UNIVERSAL_RULES: UniversalRule[] = UniversalRuleSchema.array().pars
     id: "universal-sam-registration",
     category: "registration",
     description:
-      "Applicants must have an active SAM.gov registration and a Unique Entity Identifier (UEI) before submitting a federal grant application.",
+      "Applicants must have an active SAM.gov registration and a Unique Entity Identifier (UEI) before submitting a federal financial-assistance application.",
     citation: {
       source_url: "https://www.law.cornell.edu/cfr/text/2/25.200",
       source_name: "2 CFR 25.200",
       quote: "Be registered in SAM.gov before submitting an application",
     },
-    applies_to: "all",
+    // Financial assistance (grants/R&D/assistance/loans/scholarships) + unknown
+    // kind (back-compat). Procurement is covered separately by the FAR rule below.
+    applies_to: "financial_assistance",
     gate_kind: "conditional",
     remediation:
       "Register the entity in SAM.gov and obtain a UEI before the application deadline.",
     lead_time: "SAM.gov registration commonly takes several weeks — start well before a deadline.",
+  },
+  {
+    id: "universal-procurement-registration",
+    category: "registration",
+    description:
+      "Federal procurement (contracts): an offeror must be registered in SAM.gov to submit an offer or quotation and at time of award.",
+    citation: {
+      source_url: "https://www.law.cornell.edu/cfr/text/48/52.204-7",
+      source_name: "FAR 52.204-7(b)(1) (48 CFR 52.204-7)",
+      quote:
+        "An Offeror is required to be registered in SAM when submitting an offer or quotation and at time of award",
+    },
+    applies_to: "procurement",
+    gate_kind: "conditional",
+    remediation:
+      "Register the entity in SAM.gov and obtain a UEI before submitting an offer or quotation.",
+    lead_time: "SAM.gov registration commonly takes several weeks — start well before a solicitation closes.",
+  },
+  {
+    id: "universal-loan-for-profit",
+    category: "entity_type",
+    description:
+      "SBA business loans: the applicant must be an operating business organized for profit and located in the United States.",
+    citation: {
+      source_url: "https://www.law.cornell.edu/cfr/text/13/120.100",
+      source_name: "13 CFR 120.100",
+      quote: "Be organized for profit",
+    },
+    applies_to: "loan",
+    gate_kind: "categorical",
+  },
+  {
+    id: "universal-scholarship-individual",
+    category: "entity_type",
+    description:
+      "Scholarships/fellowships are awarded to individuals — the applicant must be an individual, not an organization.",
+    citation: {
+      source_url: "https://www.law.cornell.edu/cfr/text/34/75.62",
+      source_name: "34 CFR 75.62(a)",
+      quote:
+        "An entity that provides a fellowship, scholarship, or discretionary grant to an individual",
+    },
+    applies_to: "scholarship",
+    gate_kind: "categorical",
   },
   {
     id: "universal-sbir-ownership",
@@ -137,14 +219,45 @@ export function getUniversalRules(): UniversalRule[] {
   return UNIVERSAL_RULES;
 }
 
+/** The opportunity shape the overlay reads: title/program for SBIR detection + kind. */
+export type UniversalRuleOpportunity = Pick<CanonOpportunity, "title" | "program"> & {
+  /** Instrument kind. Optional so legacy callers (title/program only) still work. */
+  kind?: OpportunityKind;
+};
+
+/** Whether a single universal rule applies to `opp`, honoring its `applies_to` scope. */
+function ruleAppliesToOpportunity(rule: UniversalRule, opp: UniversalRuleOpportunity): boolean {
+  switch (rule.applies_to) {
+    case "all":
+      return true;
+    case "sbir_sttr":
+      return isSbirSttr(opp);
+    case "financial_assistance":
+      // Unknown kind → treat as financial assistance (the v1 corpus is grants and
+      // legacy callers pass only title/program). This preserves the pre-kind
+      // behavior where the SAM.gov gate applied to every screened opportunity.
+      return opp.kind === undefined || FINANCIAL_ASSISTANCE_KINDS.has(opp.kind);
+    case "procurement":
+      return opp.kind === "procurement";
+    case "loan":
+      return opp.kind === "loan";
+    case "scholarship":
+      return opp.kind === "scholarship";
+  }
+}
+
 /**
- * The universal rules that apply to a given opportunity: everything `applies_to:
- * "all"`, plus the SBIR/STTR gates when the opportunity is an SBIR/STTR program.
- * ELG-01 evaluates these alongside the per-opportunity `model_inferred` rules.
+ * The universal rules that apply to a given opportunity. Kind-aware:
+ *  - financial assistance (grant/rd/assistance/loan/scholarship, or unknown kind)
+ *    → the 2 CFR SAM.gov registration gate;
+ *  - procurement → the FAR SAM.gov registration gate;
+ *  - loan → the SBA "organized for profit" entity gate (13 CFR 120.100);
+ *  - scholarship → the "awarded to individuals" entity gate (34 CFR 75.62);
+ *  - SBIR/STTR (by title/program) → the size + ownership gates.
+ * ELG-01 evaluates these alongside the per-opportunity `model_inferred` rules. Per
+ * R8.4 the categorical kind gates are authoritative-cited but UNREVIEWED, so an
+ * apparent mismatch renders `unknown` (needs review), never `excluded`.
  */
-export function universalRulesForOpportunity(
-  opp: Pick<CanonOpportunity, "title" | "program">,
-): UniversalRule[] {
-  const sbir = isSbirSttr(opp);
-  return UNIVERSAL_RULES.filter((r) => r.applies_to === "all" || (r.applies_to === "sbir_sttr" && sbir));
+export function universalRulesForOpportunity(opp: UniversalRuleOpportunity): UniversalRule[] {
+  return UNIVERSAL_RULES.filter((r) => ruleAppliesToOpportunity(r, opp));
 }

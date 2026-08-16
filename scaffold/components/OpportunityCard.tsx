@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { TIER_LABEL, TIER_COLOR, type Match, type Opportunity } from "@/lib/types";
+import type { EligibilityBucket } from "@/lib/contracts/eligibilityDetermination";
 import AutoApplyModal from "@/components/AutoApplyModal";
 import AutoApplyFlow from "@/components/AutoApplyFlow";
 import CompetitorAnalysisModal from "@/components/CompetitorAnalysisModal";
@@ -17,7 +18,71 @@ const KIND_LABEL: Record<string, string> = {
   rd: "R&D",
   assistance: "Assistance",
   procurement: "Procurement",
+  loan: "Loan",
+  scholarship: "Scholarship",
 };
+
+/**
+ * ONE ELIGIBILITY VOICE (§1 #5). The deterministic `EligibilityDetermination`
+ * (lib/eligibility/screen.ts) is the AUTHORITY on this card — rendered as a
+ * labelled bucket with its plain meaning. The model `whyIneligible` narrative is
+ * SUBORDINATE to it. Chip classes mirror EligibilityBuckets.tsx (the CON-02
+ * token contract only guarantees AA contrast for these semantic tokens used as
+ * FILLED chips, never as bare text/borders on canvas).
+ */
+const DETERMINATION_META: Record<EligibilityBucket, { label: string; meaning: string; chip: string }> = {
+  eligible: {
+    label: "Eligible",
+    meaning: "Every eligibility gate we have a rule for is met.",
+    chip: "bg-success text-on-semantic",
+  },
+  conditionally_eligible: {
+    label: "Action needed",
+    meaning: "Reachable — complete the required step below and this opens up.",
+    chip: "bg-info text-on-semantic",
+  },
+  unknown: {
+    label: "Needs info",
+    meaning: "We won't guess — confirm the open items and we'll screen this.",
+    chip: "bg-warning text-on-semantic",
+  },
+  excluded: {
+    label: "Excluded",
+    meaning: "A cited, reviewed rule rules this out — the named reason is shown below.",
+    chip: "bg-error text-token-white",
+  },
+};
+
+/**
+ * Definitive (non-hedged) exclusion assertions the subordinate narrative may
+ * make ONLY when the engine itself excluded. Mirrors the INVARIANT enforced by
+ * `reconcileIneligibilityNarrative` in lib/claude.ts (the canonical, unit-tested
+ * version). The card intentionally does NOT import that function: this component
+ * is a client bundle and lib/claude.ts pulls in the server-only Anthropic SDK.
+ * This conservative mirror detects a definitive over-assertion and, since the
+ * authoritative determination is already rendered above, replaces it wholesale
+ * with a determination-free caution rather than softening in place.
+ */
+const CARD_DEFINITIVE_EXCLUSION =
+  /\b(?:you(?:'re| are)\s+(?:currently\s+)?(?:ineligible|not eligible|excluded|disqualified|barred)|you\s+(?:do|does)\s+not\s+qualify|you\s+don'?t\s+qualify|your\s+company\s+is\s+(?:ineligible|not eligible|excluded|disqualified)|(?:this|the)\s+(?:program|opportunity|solicitation)\s+(?:excludes|disqualifies|bars)\s+you|renders?\s+you\s+ineligible|makes?\s+you\s+ineligible)\b/i;
+
+const CARD_RECONCILED_NARRATIVE =
+  "These are concerns to verify with the program officer — not a determination that you are ruled out. Your eligibility status is the screening result shown above.";
+
+/**
+ * Reconcile the model narrative to the engine bucket. When the engine did NOT
+ * exclude, a definitive-exclusion assertion is replaced with a determination-free
+ * caution so the subordinate narrative can never assert a determination the
+ * engine didn't make (R8.4). Hedged or non-definitive narratives pass through.
+ */
+function reconcileCardNarrative(raw: string, bucket: EligibilityBucket | undefined): string {
+  if (bucket === "excluded") return raw; // the engine's own determination — may state it
+  if (!bucket) {
+    // No engine determination attached → still neutralize a bald exclusion claim.
+    return CARD_DEFINITIVE_EXCLUSION.test(raw) ? CARD_RECONCILED_NARRATIVE : raw;
+  }
+  return CARD_DEFINITIVE_EXCLUSION.test(raw) ? CARD_RECONCILED_NARRATIVE : raw;
+}
 
 /**
  * Darker tier text for the small 11px label + score so they clear WCAG
@@ -111,10 +176,21 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
   const value = fundingRange(o);
   const kindLabel = KIND_LABEL[o.kind] ?? o.kind;
 
+  // AUTHORITY: the deterministic screening determination is the source of truth
+  // for eligibility on this card (§1 #5). It may be absent (screening omitted /
+  // errored for this match) — the card degrades to the narrative-only view.
+  const determination = m.eligibility?.determination;
+  const bucket = determination?.bucket;
+  const detMeta = bucket ? DETERMINATION_META[bucket] : undefined;
+  const freshnessCaveat = m.eligibility?.freshness?.caveat ?? null;
+
   // "What could make you ineligible" is spec-mandatory — never render it blank.
-  const ineligible = m.whyIneligible?.trim()
+  // SUBORDINATE to the determination above: reconciled so it can never assert a
+  // determination the engine didn't make (R8.4).
+  const rawIneligible = m.whyIneligible?.trim()
     ? m.whyIneligible
     : "No disqualifying factors surfaced from your description, but eligibility still turns on the program's formal requirements. Confirm size standards, required registrations, and topic scope with the program officer before applying.";
+  const ineligible = reconcileCardNarrative(rawIneligible, bucket);
 
   const nextSteps = m.whatToDoNext?.trim();
 
@@ -286,6 +362,16 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
             <dt className={dtClass}>Type </dt>
             <dd className="inline">{kindLabel}</dd>
           </div>
+          {detMeta && (
+            <div className="flex items-center gap-1.5">
+              <dt className={dtClass}>Eligibility </dt>
+              <dd className="inline">
+                <span className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[11px] uppercase tracking-eyebrow ${detMeta.chip}`}>
+                  {detMeta.label}
+                </span>
+              </dd>
+            </div>
+          )}
         </dl>
       </button>
 
@@ -352,12 +438,31 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
           )}
 
           <Section design={design} title="Why we think you're a fit" body={m.whyFit} />
+
+          {/*
+            AUTHORITY (§1 #5): the deterministic screening determination is the
+            source of truth for eligibility. It renders ABOVE the model
+            "ineligible" narrative, which is subordinate to it.
+          */}
+          {detMeta && (
+            <DeterminationAuthority
+              design={design}
+              meta={detMeta}
+              steps={determination?.required_steps ?? []}
+              caveat={freshnessCaveat}
+            />
+          )}
+
           <Section
             design={design}
             title="What could make you ineligible"
             body={ineligible}
             accent
-            note="Model assessment — a generated read on possible concerns, not a cited rule or a formal eligibility determination. Confirm requirements with the program officer."
+            note={
+              detMeta
+                ? "Model assessment — a generated read on possible concerns. It is SUBORDINATE to the eligibility screening above (the authority) and can never state a determination the screening didn't make."
+                : "Model assessment — a generated read on possible concerns, not a cited rule or a formal eligibility determination. Confirm requirements with the program officer."
+            }
           />
           <Section design={design} title="What you should verify" body={m.whatToVerify} />
 
@@ -464,6 +569,84 @@ function Section({ title, body, accent, design, note }: { title: string; body?: 
       <p className={eyebrowClass(design, "mb-1.5")}>{title}</p>
       <p className={bodyClass}>{body}</p>
       {note && <p className={noteClass}>{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * The deterministic eligibility determination, rendered as the card's AUTHORITY
+ * (§1 #5 / R8.4). A filled bucket chip + its plain-language meaning, the concrete
+ * required steps for a conditional determination, and the freshness caveat when
+ * the screen ran against stale data (§4.5/§11 — must be visibly flagged). This is
+ * the source of truth the model "ineligible" narrative below is subordinate to.
+ */
+function DeterminationAuthority({
+  design,
+  meta,
+  steps,
+  caveat,
+}: {
+  design: boolean;
+  meta: { label: string; meaning: string; chip: string };
+  steps: { step: string; lead_time_days?: number; why?: string }[];
+  caveat: string | null;
+}) {
+  const wrapClass = design ? "rounded-md bg-canvas px-4 py-3" : "border border-rule px-4 py-3";
+  const headingClass = design
+    ? "font-display text-[15px] font-semibold leading-snug text-foreground"
+    : "font-display text-[15px] font-semibold leading-snug";
+  const meaningClass = design
+    ? "mt-1 text-pretty font-body text-[13px] leading-relaxed text-foreground"
+    : "mt-1 font-body text-[13px] leading-relaxed text-slate-550";
+  const stepTextClass = design
+    ? "font-body text-[13px] font-medium leading-snug text-foreground"
+    : "font-body text-[13px] font-medium leading-snug";
+  const stepWhyClass = design
+    ? "mt-0.5 font-body text-[12px] leading-relaxed text-foreground"
+    : "mt-0.5 font-body text-[12px] leading-relaxed text-slate-550";
+  const chipClass = `inline-block rounded-sm px-2 py-0.5 font-mono text-[11px] uppercase tracking-eyebrow ${meta.chip}`;
+  const leadChipClass = design
+    ? "inline-block shrink-0 rounded-sm bg-info px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow tabular-nums text-on-semantic"
+    : "inline-block shrink-0 rounded-sm border border-rule px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-eyebrow text-slate-550";
+  const caveatClass = design
+    ? "mt-2 border-l-2 border-warning pl-3 font-body text-[12px] italic leading-relaxed text-foreground"
+    : "mt-2 border-l-2 border-fit-adjacent pl-3 font-body text-[12px] italic leading-relaxed text-slate-550";
+
+  return (
+    <div className="mb-5">
+      <p className={eyebrowClass(design, "mb-1.5")}>Eligibility screening &middot; the authority</p>
+      <div className={wrapClass}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={chipClass}>{meta.label}</span>
+          <span className={headingClass}>{meta.meaning}</span>
+        </div>
+
+        {steps.length > 0 && (
+          <ul className="mt-3 space-y-2">
+            {steps.map((s, i) => {
+              const lead =
+                typeof s.lead_time_days === "number"
+                  ? `~${s.lead_time_days} day${s.lead_time_days === 1 ? "" : "s"}`
+                  : null;
+              return (
+                <li key={`${s.step}-${i}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={stepTextClass}>{s.step}</span>
+                    {lead && <span className={leadChipClass}>{lead}</span>}
+                  </div>
+                  {s.why && <p className={stepWhyClass}>{s.why}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {caveat && (
+          <p role="note" className={caveatClass}>
+            <span className="font-mono uppercase tracking-eyebrow not-italic">Data freshness</span> — {caveat}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
