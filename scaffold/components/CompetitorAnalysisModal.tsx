@@ -5,49 +5,112 @@ import { createPortal } from "react-dom";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import { useBilling } from "@/components/BillingProvider";
 import { useEntitlements } from "@/lib/entitlements/useEntitlements";
+import { isFlagEnabled } from "@/lib/flags";
 import CompetitorResults from "@/components/CompetitorResults";
 import demoCompetitorFixture from "@/data/demo-competitor-fastercontrol.json";
 
 /**
- * R5 (PRO-01) — Competitor & Grant Intelligence, Max-gated + demo-first.
+ * R5 — Competitor & Grant Intelligence, Max-gated + demo-first, now with a LIVE
+ * personalized run behind the default-OFF `r5_deep_analysis` flag.
  *
- * Evolves the old "not built yet" stub into the real demoable slice. Gating
- * reads the UNIFIED billing interface (Phase-4 #41): the reactive tier from
- * `useBilling()` is passed into `useEntitlements(tier)`, so this modal never
- * introduces a second source of truth and stays in sync with the OpportunityCard
- * padlocks and the sidebar billing selector.
+ * Gating reads the UNIFIED billing interface (Phase-4 #41): the reactive tier
+ * from `useBilling()` feeds `useEntitlements(tier)`, so this modal never adds a
+ * second source of truth and stays in sync with the OpportunityCard padlocks.
  *
- *   - Non-Max (competitorEnabled === false): a "Maximum plan" padlock + honest
- *     description, a primary "Upgrade to Max" (flips the labeled MOCK billing
- *     tier — charges nothing), and a secondary "Demo this" that renders the
- *     captured example.
- *   - Max (competitorEnabled === true): a primary "View example analysis". The
- *     LIVE personalized run is a named follow-up (/api/competitors); for now
- *     both tiers see the SAME real example fixture, honestly labeled as such.
+ *   - Non-Max (competitorEnabled === false): "Maximum plan" padlock + honest
+ *     description, a primary "Upgrade to Max" (flips the labeled MOCK tier —
+ *     charges nothing) and a secondary "Demo this" (the captured real example).
+ *   - Max + flag OFF (default): "View example analysis" (the saved real example).
+ *   - Max + flag ON + a company profile: a primary "Run live analysis" that POSTs
+ *     to /api/competitors for a real, personalized, grounded market brief — and
+ *     falls back to the saved example WITH AN HONEST NOTE if the live run can't
+ *     assemble enough grounded data (feasibility §6 honest-degradation posture).
  *
- * The example itself (CompetitorResults) is built from REAL public federal award
- * data captured once (scripts/5-competitors.mjs) and is validated through the
- * grounding contract at its boundary. It is never presented as a live run and
- * never fabricates an award or amount (R7.7).
- *
- * Portaled to document.body so the fixed overlay escapes the opportunity card's
- * stacking/overflow context (matching AutoApplyModal); `useDialogA11y` inerts the
- * background and traps focus. Top-aligned + scrollable for the taller results view.
+ * Every rendered brief (live or demo) is validated through the grounding
+ * contract at the CompetitorResults boundary and never fabricates an award (R7.7).
  */
-export default function CompetitorAnalysisModal({ onClose }: { onClose: () => void }) {
+
+type View = "intro" | "loading" | "results";
+
+export interface CompetitorAnalysisModalProps {
+  onClose: () => void;
+  /** The founder's company, for a live personalized run. Absent → demo-only. */
+  profile?: { description: string; keywords?: string[]; persona?: string };
+  /** The target opportunity being viewed, for framing the live analysis. */
+  opportunity?: { program?: string; agency?: string };
+}
+
+export default function CompetitorAnalysisModal({ onClose, profile, opportunity }: CompetitorAnalysisModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
 
-  // Unified billing (Phase-4 #41): reactive tier -> entitlement view.
   const { tier, setTier } = useBilling();
   const { competitorEnabled } = useEntitlements(tier);
   const isMax = competitorEnabled; // competitor_intelligence is a Max-only feature.
 
-  const [showResults, setShowResults] = useState(false);
+  // Live run is offered ONLY when the default-OFF flag is on, the tier is Max,
+  // and we actually have a company description to ground the run in.
+  const hasProfile = !!profile && typeof profile.description === "string" && profile.description.trim().length >= 20;
+  const liveAvailable = isFlagEnabled("r5_deep_analysis") && isMax && hasProfile;
 
+  const [view, setView] = useState<View>("intro");
+  const [resultRaw, setResultRaw] = useState<unknown>(null);
+  const [resultVariant, setResultVariant] = useState<"live" | "demo">("demo");
+  const [note, setNote] = useState<string | null>(null);
+
+  const showDemo = () => {
+    setResultRaw(demoCompetitorFixture);
+    setResultVariant("demo");
+    setNote(null);
+    setView("results");
+  };
+
+  const fallBackToDemo = (message: string) => {
+    setResultRaw(demoCompetitorFixture);
+    setResultVariant("demo");
+    setNote(message);
+    setView("results");
+  };
+
+  const runLive = async () => {
+    if (!profile?.description) return;
+    setView("loading");
+    setNote(null);
+    try {
+      const res = await fetch("/api/competitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          persona: profile.persona,
+          description: profile.description,
+          keywords: profile.keywords,
+          opportunity,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (json?.ok && json.analysis) {
+        setResultRaw(json.analysis);
+        setResultVariant("live");
+        setNote(null);
+        setView("results");
+        return;
+      }
+      fallBackToDemo(
+        json?.reason === "insufficient_evidence"
+          ? "We couldn't find enough grounded public award data for a reliable live brief right now — here's a saved example built from real public data instead."
+          : "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
+      );
+    } catch {
+      fallBackToDemo(
+        "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
+      );
+    }
+  };
+
+  const isResults = view === "results";
   const panelClass = `relative max-h-[calc(100dvh-4rem)] w-full ${
-    showResults ? "max-w-3xl" : "max-w-lg"
+    isResults ? "max-w-3xl" : "max-w-lg"
   } overflow-y-auto rounded-lg border border-structure-on-canvas bg-canvas p-6 text-foreground shadow-overlay`;
 
   const eyebrowClass = "font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas";
@@ -58,7 +121,6 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
   const footnoteClass =
     "mt-6 border-t border-structure-on-canvas pt-4 text-pretty font-body text-[11px] leading-relaxed text-foreground";
 
-  // Green bg-action is reserved for the ONE primary CTA (R7 60/30/10).
   const primaryBtnClass =
     "inline-flex min-h-[44px] items-center rounded-sm bg-action px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2";
   const secondaryBtnClass =
@@ -89,21 +151,41 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
           <XIcon className="h-4 w-4" />
         </button>
 
-        {showResults ? (
+        {isResults ? (
           <div className="pr-6">
             <div className="flex items-center justify-between gap-2">
-              <button type="button" onClick={() => setShowResults(false)} className={textBtnClass}>
+              <button type="button" onClick={() => setView("intro")} className={textBtnClass}>
                 ‹ Back
               </button>
             </div>
             <h2 id="competitor-analysis-modal-title" className="sr-only">
-              Competitor &amp; grant intelligence — example analysis
+              Competitor &amp; grant intelligence — {resultVariant === "live" ? "live analysis" : "example analysis"}
             </h2>
             <p id="competitor-analysis-modal-desc" className="sr-only">
-              An example competitor and grant analysis built from real public federal award data.
+              A competitor and grant market brief grounded in real public federal award data.
             </p>
+            {note && (
+              <div className="mt-3 rounded-sm border border-structure-on-canvas bg-canvas-alt px-3 py-2">
+                <p className="text-pretty font-body text-[12px] leading-relaxed text-foreground">{note}</p>
+              </div>
+            )}
             <div className="mt-3">
-              <CompetitorResults raw={demoCompetitorFixture} />
+              <CompetitorResults raw={resultRaw} variant={resultVariant} />
+            </div>
+          </div>
+        ) : view === "loading" ? (
+          <div className="py-6 text-center">
+            <p className={eyebrowClass}>Analyzing</p>
+            <h2 id="competitor-analysis-modal-title" className={titleClass}>
+              Building your market brief…
+            </h2>
+            <p id="competitor-analysis-modal-desc" className={bodyClass}>
+              Retrieving real public federal award records (USAspending, NIH RePORTER, NSF) and analyzing how
+              funded companies positioned themselves. This can take up to a couple of minutes — nothing is
+              submitted on your behalf.
+            </p>
+            <div className="mt-6 flex justify-center">
+              <Spinner />
             </div>
           </div>
         ) : (
@@ -124,10 +206,15 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
               nothing is invented, and each one links back to its official source so you can verify it.
             </p>
 
-            {isMax ? (
+            {liveAvailable ? (
               <p className={bodyClass}>
-                Live, personalized analysis of your own company is coming soon. In the meantime, here
-                is a saved example built from {recordCount} real public award records — clearly labeled
+                Run a <strong>live, personalized</strong> market brief for your company now — or preview a
+                saved example first. The live run is real analysis, grounded in public award data; it is not
+                a guarantee of funding.
+              </p>
+            ) : isMax ? (
+              <p className={bodyClass}>
+                Here is a saved example built from {recordCount} real public award records — clearly labeled
                 as an example, not a live run.
               </p>
             ) : (
@@ -138,8 +225,17 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
             )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              {isMax ? (
-                <button type="button" onClick={() => setShowResults(true)} className={primaryBtnClass}>
+              {liveAvailable ? (
+                <>
+                  <button type="button" onClick={runLive} className={primaryBtnClass}>
+                    Run live analysis
+                  </button>
+                  <button type="button" onClick={showDemo} className={secondaryBtnClass}>
+                    Preview example
+                  </button>
+                </>
+              ) : isMax ? (
+                <button type="button" onClick={showDemo} className={primaryBtnClass}>
                   View example analysis
                 </button>
               ) : (
@@ -147,7 +243,7 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
                   <button type="button" onClick={() => setTier("max")} className={primaryBtnClass}>
                     Upgrade to Max
                   </button>
-                  <button type="button" onClick={() => setShowResults(true)} className={secondaryBtnClass}>
+                  <button type="button" onClick={showDemo} className={secondaryBtnClass}>
                     Demo this
                   </button>
                 </>
@@ -159,7 +255,7 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
 
             <p className={footnoteClass}>
               {isMax
-                ? "This screen runs no live analysis and submits nothing. The example uses real, public award data captured once."
+                ? "The saved example uses real, public award data captured once. A live run retrieves fresh public records and analyzes them; it submits nothing and is analysis, not a guarantee of funding."
                 : "“Upgrade to Max” selects a labeled demo billing tier — it collects no payment and syncs nowhere. It doesn’t imply any endorsement or affiliation with a funding agency or the federal government."}
             </p>
           </>
@@ -167,6 +263,20 @@ export default function CompetitorAnalysisModal({ onClose }: { onClose: () => vo
       </div>
     </div>,
     document.body,
+  );
+}
+
+function Spinner() {
+  return (
+    <svg
+      className="h-6 w-6 animate-spin text-structure-on-canvas"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <path className="opacity-90" d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
   );
 }
 
