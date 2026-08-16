@@ -40,7 +40,8 @@ export type FlagName =
   | "g6_s2s_submission"
   | "b2_enriched_ranking"
   | "c1b_type_groups"
-  | "d4_opportunity_graph";
+  | "d4_opportunity_graph"
+  | "d3_funding_strategy";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -185,5 +186,14 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "Compact Startup -> Technology -> Agency -> Program -> Award node-link graph on the " +
       "opportunity map, rendered from the existing map/matches/agencyIntelligence data.",
     envVar: "NEXT_PUBLIC_FLAG_D4_OPPORTUNITY_GRAPH",
+  },
+  d3_funding_strategy: {
+    name: "d3_funding_strategy",
+    requirement: "D3",
+    description:
+      "\"Funding strategy\": an ordered 12-month plan of up to 5 programs to investigate, sequenced " +
+      "by fit, real deadlines, and federal registration lead time. Presentation-only; derived from " +
+      "the existing OpportunityMap; promises no award and never invents a deadline.",
+    envVar: "NEXT_PUBLIC_FLAG_D3_FUNDING_STRATEGY",
   },
 };
