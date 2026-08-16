@@ -38,3 +38,26 @@ export { toSubmissionMeta } from "./meta";
 // Deterministic, gap-preserving AssembledPackage → grants.gov application-XML +
 // SOAP-envelope mapping (T-B). UNVERIFIED / re-verify-required, mock-only.
 export { SCHEMA_VERSION, toGrantApplicationXml, toSoapEnvelope } from "./xml";
+
+// Pluggable transport + the SAFETY CORE guards (T-C). Mock is the ONLY wired
+// transport; sandbox/live throw. `assertNonProductionEndpoint` is default-deny.
+export {
+  MockTransport,
+  selectTransport,
+  assertNonProductionEndpoint,
+  TransportNotAvailableError,
+  ProductionEndpointRefusedError,
+} from "./transport";
+export type { SubmissionTransport, MockTransportOptions } from "./transport";
+
+// Per-org S2S config model (T-C): org-supplied, server-only, sandbox-only,
+// null-by-default, cert REFERENCE not secret.
+export { loadOrgS2SConfig, ORG_S2S_ENV_VARS } from "./config";
+export type { OrgS2SConfig } from "./config";
+
+// The AOR-authorization gate (T-C): a scoped attestation check, not auth.
+export { assertSubmissionAuthorized, SubmissionNotAuthorizedError } from "./authorize";
+
+// The orchestrating, mock-only submission client (T-C).
+export { submitPackage } from "./client";
+export type { SubmitOptions } from "./client";
