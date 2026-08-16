@@ -7,6 +7,7 @@ import AgencyMap from "./AgencyMap";
 import OpportunityGroups from "./OpportunityGroups";
 import OpportunityGraph from "./OpportunityGraph";
 import FundingStrategy from "./FundingStrategy";
+import OpportunityAlerts from "./OpportunityAlerts";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
@@ -185,6 +186,12 @@ export default function OpportunityMap({ map }: { map: MapT }) {
             )}
           </section>
         )}
+
+        {/* D5 — "Since your last visit" alerts: new matches / tier upgrades /
+            newly closing-soon, diffed client-only against a localStorage
+            snapshot of the founder's last run. Default-off; all logic lives
+            in OpportunityAlerts.tsx + lib/alerts/*. */}
+        {isFlagEnabled("d5_alerts") && <OpportunityAlerts map={map} />}
 
         {followUps.length > 0 && (
           <section className={followUpsSectionClass}>

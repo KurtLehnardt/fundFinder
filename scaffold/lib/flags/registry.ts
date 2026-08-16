@@ -41,7 +41,8 @@ export type FlagName =
   | "b2_enriched_ranking"
   | "c1b_type_groups"
   | "d4_opportunity_graph"
-  | "d3_funding_strategy";
+  | "d3_funding_strategy"
+  | "d5_alerts";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -195,5 +196,14 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "by fit, real deadlines, and federal registration lead time. Presentation-only; derived from " +
       "the existing OpportunityMap; promises no award and never invents a deadline.",
     envVar: "NEXT_PUBLIC_FLAG_D3_FUNDING_STRATEGY",
+  },
+  d5_alerts: {
+    name: "d5_alerts",
+    requirement: "D5",
+    description:
+      "\"Since your last visit\" opportunity alerts: a client-only, localStorage-only diff " +
+      "(new matches, tier upgrades, newly closing-soon) against the founder's last saved run " +
+      "for the same profile. Never sent to a server (§5.3).",
+    envVar: "NEXT_PUBLIC_FLAG_D5_ALERTS",
   },
 };
