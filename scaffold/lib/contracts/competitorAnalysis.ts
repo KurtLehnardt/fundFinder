@@ -273,3 +273,32 @@ export type CompetitorAnalysis = z.infer<typeof CompetitorAnalysisSchema>;
 export function parseCompetitorAnalysis(raw: unknown): CompetitorAnalysis {
   return CompetitorAnalysisSchema.parse(raw);
 }
+
+/**
+ * R5-deep streaming wire events (NDJSON, one JSON object per line) emitted by
+ * `POST /api/competitors` so the client can show live progress instead of a
+ * frozen spinner for the full ~60s run.
+ *
+ * IMPORTANT — anti-fabrication boundary is preserved: the only MODEL-generated
+ * content (competitor positioning, recommendations, opportunities) rides on the
+ * final `result` event, whose `analysis` has already passed `groundSynthesis` +
+ * `CompetitorAnalysisSchema.parse()`. The earlier `evidence` event carries only
+ * RETRIEVAL data (real federal award records, server-computed award stats, and
+ * exa web profiles with real URLs) — never a synthesized claim — so surfacing it
+ * early is honest, not a fabrication risk. `stage` is pure progress; `error` is
+ * an honest degradation the client renders as a fall-back-to-demo note.
+ *
+ * A type only (no schema) — it crosses into the client bundle, which must not
+ * import the server-only engine. The route builds these; the client narrows on
+ * `type`.
+ */
+export type CompetitorStreamEvent =
+  | { type: "stage"; key: string; label: string; pct: number }
+  | {
+      type: "evidence";
+      records: GroundedAwardRecord[];
+      awardStats: AwardStats;
+      webProfiles: WebCompetitorProfile[];
+    }
+  | { type: "result"; ok: true; analysis: CompetitorAnalysis }
+  | { type: "error"; ok: false; reason: "insufficient_evidence" | "unavailable"; message: string };

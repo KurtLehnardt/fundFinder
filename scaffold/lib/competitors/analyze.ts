@@ -7,6 +7,7 @@ import { searchWebCompetitors, type RawWebProfile, type WebSearchResult } from "
 import {
   CompetitorAnalysisSchema,
   type CompetitorAnalysis,
+  type CompetitorStreamEvent,
   type GroundedAwardRecord,
   type WebCompetitorProfile,
   type AwardStats,
@@ -59,6 +60,17 @@ export interface AnalyzeInput {
   webProfilesOverride?: RawWebProfile[];
   /** "live" (request-time run, default) or "demo" (a saved fixture capture). */
   mode?: "live" | "demo";
+  /**
+   * Optional progress sink for the streaming route. When present, the pipeline
+   * emits `stage` events at each boundary and one `evidence` event (grounded
+   * awards/stats/web) BEFORE the sonnet synthesis — so the client can render a
+   * live "what we found" view while the brief is still being written. Omitted by
+   * the demo-capture script and tests, which just want the returned analysis, so
+   * this is purely additive: without it, behavior is byte-identical to before.
+   * The synthesized brief itself is NEVER streamed here — it rides the route's
+   * final `result` event only after grounding + schema validation.
+   */
+  onEvent?: (event: CompetitorStreamEvent) => void;
 }
 
 /** Thrown when a live run could not assemble enough grounded evidence. */
@@ -281,6 +293,8 @@ export function buildWebQuery(input: {
 export async function analyzeCompetitors(input: AnalyzeInput): Promise<CompetitorAnalysis> {
   const keepTopK = input.keepTopK ?? 8;
   const notes: string[] = [];
+  const emit = input.onEvent;
+  emit?.({ type: "stage", key: "search", label: "Searching federal awards and comparable companies…", pct: 8 });
 
   // [3-early] WEB (started concurrently). Comparable private companies depend only
   // on the persona/description/keywords — NOT on the retrieved records — so we kick
@@ -305,6 +319,7 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
       `Only ${retrieval.records.length} grounded record(s) retrieved (need ≥ ${MIN_GROUNDED_RECORDS}).`,
     );
   }
+  emit?.({ type: "stage", key: "retrieved", label: `Found ${retrieval.records.length} federal award records`, pct: 30 });
 
   // [2] RERANK by similarity to the persona — ONE batched embedding call for the
   // persona + every record (was a serial per-record `await embed()` loop, the
@@ -321,6 +336,7 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
   } catch {
     notes.push("Similarity rerank unavailable (embeddings) — showing records in retrieval order.");
   }
+  emit?.({ type: "stage", key: "ranked", label: "Ranked awards by relevance to your company", pct: 45 });
 
   const records = assignIds(withSim.slice(0, keepTopK));
 
@@ -335,6 +351,21 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
     snippet: p.snippet,
     via: p.via,
   }));
+  const awardStats = computeAwardStats(records);
+
+  // Emit the grounded EVIDENCE (retrieval data only — real awards, server-computed
+  // stats, exa web profiles; never a synthesized claim) so the client can render a
+  // live "what we found" view while the sonnet brief is still being written.
+  emit?.({
+    type: "stage",
+    key: "web",
+    label: webProfiles.length
+      ? `Found ${webProfiles.length} comparable ${webProfiles.length === 1 ? "company" : "companies"}`
+      : "Comparable companies: federal awardees only",
+    pct: 55,
+  });
+  emit?.({ type: "evidence", records, awardStats, webProfiles });
+  emit?.({ type: "stage", key: "synth", label: "Writing your positioning brief…", pct: 65 });
 
   // [4] SYNTHESIZE
   const synthesis = await synthesize(input, records, webProfiles);
@@ -352,7 +383,7 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
     capturedAt: new Date().toISOString(),
     records,
     ...(webProfiles.length ? { webProfiles } : {}),
-    awardStats: computeAwardStats(records),
+    awardStats,
     analysis: {
       ...(synthesis.summary ? { summary: synthesis.summary } : {}),
       competitors,

@@ -8,6 +8,24 @@ import { useEntitlements } from "@/lib/entitlements/useEntitlements";
 import { isFlagEnabled } from "@/lib/flags";
 import CompetitorResults from "@/components/CompetitorResults";
 import demoCompetitorFixture from "@/data/demo-competitor-fastercontrol.json";
+import { drainNdjson } from "@/lib/competitors/ndjson";
+import type {
+  CompetitorStreamEvent,
+  GroundedAwardRecord,
+  WebCompetitorProfile,
+  AwardStats,
+} from "@/lib/contracts/competitorAnalysis";
+
+type LiveEvidence = {
+  records: GroundedAwardRecord[];
+  awardStats: AwardStats;
+  webProfiles: WebCompetitorProfile[];
+};
+
+/** Compact whole-dollar USD for the live loading preview. */
+function fmtUsd(n: number): string {
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
 
 /**
  * R5 — Competitor & Grant Intelligence, Max-gated + demo-first, now with a LIVE
@@ -58,6 +76,10 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
   const [resultRaw, setResultRaw] = useState<unknown>(null);
   const [resultVariant, setResultVariant] = useState<"live" | "demo">("demo");
   const [note, setNote] = useState<string | null>(null);
+  // Live streaming state (progressive loading view): the current stage + the
+  // grounded evidence (real awards / stats / web competitors) as it's found.
+  const [progress, setProgress] = useState<{ label: string; pct: number } | null>(null);
+  const [evidence, setEvidence] = useState<LiveEvidence | null>(null);
 
   const showDemo = () => {
     setResultRaw(demoCompetitorFixture);
@@ -77,6 +99,8 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
     if (!profile?.description) return;
     setView("loading");
     setNote(null);
+    setProgress({ label: "Starting your analysis…", pct: 2 });
+    setEvidence(null);
     try {
       const res = await fetch("/api/competitors", {
         method: "POST",
@@ -88,19 +112,55 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
           opportunity,
         }),
       });
-      const json = await res.json().catch(() => null);
-      if (json?.ok && json.analysis) {
-        setResultRaw(json.analysis);
-        setResultVariant("live");
-        setNote(null);
-        setView("results");
+      // Validation errors return plain JSON (never a stream) — check res.ok first.
+      if (!res.ok || !res.body) {
+        fallBackToDemo(
+          "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
+        );
         return;
       }
-      fallBackToDemo(
-        json?.reason === "insufficient_evidence"
-          ? "We couldn't find enough grounded public award data for a reliable live brief right now — here's a saved example built from real public data instead."
-          : "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
-      );
+
+      // Read the NDJSON stream: stage/evidence events update the live loading
+      // view; `result` renders the validated brief; `error` falls back to demo.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let settled = false;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        const { objects, rest } = drainNdjson(buffer);
+        buffer = rest;
+        for (const obj of objects) {
+          const evt = obj as CompetitorStreamEvent;
+          if (evt.type === "stage") {
+            setProgress({ label: evt.label, pct: evt.pct });
+          } else if (evt.type === "evidence") {
+            setEvidence({ records: evt.records, awardStats: evt.awardStats, webProfiles: evt.webProfiles });
+          } else if (evt.type === "result") {
+            settled = true;
+            setResultRaw(evt.analysis);
+            setResultVariant("live");
+            setNote(null);
+            setView("results");
+          } else if (evt.type === "error") {
+            settled = true;
+            fallBackToDemo(
+              evt.reason === "insufficient_evidence"
+                ? "We couldn't find enough grounded public award data for a reliable live brief right now — here's a saved example built from real public data instead."
+                : "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
+            );
+          }
+        }
+        if (settled) return;
+        if (done) break;
+      }
+      // Stream ended without a terminal event — degrade honestly.
+      if (!settled) {
+        fallBackToDemo(
+          "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
+        );
+      }
     } catch {
       fallBackToDemo(
         "Live analysis is temporarily unavailable — here's a saved example built from real public data instead.",
@@ -174,19 +234,66 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
             </div>
           </div>
         ) : view === "loading" ? (
-          <div className="py-6 text-center">
+          <div className="py-6">
             <p className={eyebrowClass}>Analyzing</p>
             <h2 id="competitor-analysis-modal-title" className={titleClass}>
               Building your market brief…
             </h2>
             <p id="competitor-analysis-modal-desc" className={bodyClass}>
               Retrieving real public federal award records (USAspending, NIH RePORTER, NSF) and analyzing how
-              funded companies positioned themselves. This can take up to a couple of minutes — nothing is
-              submitted on your behalf.
+              funded companies positioned themselves — nothing is submitted on your behalf.
             </p>
-            <div className="mt-6 flex justify-center">
-              <Spinner />
+
+            {/* Live progress: the current stage + a bar, updated as the pipeline streams. */}
+            <div className="mt-6" aria-live="polite">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
+                  {progress?.label ?? "Working…"}
+                </p>
+                <Spinner />
+              </div>
+              <div
+                className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-canvas-alt"
+                role="progressbar"
+                aria-valuenow={progress?.pct ?? 0}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className="h-full rounded-full bg-structure transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(4, Math.min(100, progress?.pct ?? 4))}%` }}
+                />
+              </div>
             </div>
+
+            {/* Grounded evidence as it's found — REAL retrieval data (awards, stats,
+                comparable companies), never a synthesized claim, so showing it early
+                is honest. The cited brief still renders only after validation. */}
+            {evidence && (
+              <div className="mt-5 space-y-3 rounded-sm border border-structure-on-canvas bg-canvas-alt px-4 py-3 text-left">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
+                    Federal awards found
+                  </p>
+                  <p className="mt-1 font-body text-[13px] leading-relaxed text-foreground">
+                    {evidence.awardStats.count} real award{evidence.awardStats.count === 1 ? "" : "s"}
+                    {evidence.awardStats.minAmount != null && evidence.awardStats.maxAmount != null
+                      ? ` · ${fmtUsd(evidence.awardStats.minAmount)}–${fmtUsd(evidence.awardStats.maxAmount)}`
+                      : ""}
+                  </p>
+                </div>
+                {evidence.webProfiles.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas">
+                      Comparable companies
+                    </p>
+                    <p className="mt-1 font-body text-[13px] leading-relaxed text-foreground">
+                      {evidence.webProfiles.slice(0, 5).map((w) => w.company).join(" · ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>
