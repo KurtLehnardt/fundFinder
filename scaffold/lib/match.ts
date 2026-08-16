@@ -9,6 +9,7 @@ import awards from "@/data/awards.json";
 import { createCostMeter, type CostMeter } from "./metering/meter";
 import { CURRENT_OPPORTUNITY_MAP_VERSION } from "./contracts/opportunityMap";
 import { isFlagEnabled } from "./flags";
+import { recommendFor, mapVerdict } from "./recommend";
 // F3 — weak-field redirects should name a few REAL Utah/SBA programs, not just
 // categories. Wrapped around both explainWeakField() call sites below (the
 // zero-candidate weakField() branch and the below-threshold branch in
@@ -378,15 +379,60 @@ export async function buildOpportunityMap(
   }
   step({ key: "eligibility", label: "Checking eligibility", pct: 94 });
 
-  const strong = matches.filter((m) => m.score >= CALIBRATION.scoreFloor);
+  // DISCERNMENT (flag `discernment_layer`, default OFF): attach an ADVISORY
+  // per-match verdict (recommend / verify / do_not_recommend) derived purely from
+  // the score, the model's own met-criteria, and any FOUNDER-STATED disqualifier —
+  // never a model-inferred exclusion (R8.4). When ON, "high potential" is recounted
+  // as recommend-only and the honest-no is driven by a whole-map verdict. When OFF,
+  // everything below is byte-unchanged.
+  const discernment = isFlagEnabled("discernment_layer");
+  if (discernment) {
+    for (const m of matches) {
+      m.recommendation = recommendFor({
+        adjustedScore: m.score,
+        kind: m.opportunity.kind,
+        criteria: m.criteria,
+        // Reserved for a founder-STATED hard mismatch; the v1 profile/companyFacts
+        // carry no structured ownership/size signal, so it is never set here — the
+        // aggressive score/criteria floors do the discernment work.
+        statedDisqualifier: false,
+      });
+    }
+  }
 
-  // 5. The honest no. Weak field is a finding, not an empty state.
+  // "Strong" = the headline high-potential set. Under discernment that's the
+  // matches we actually RECOMMEND; otherwise the legacy score>=scoreFloor set.
+  const strong = discernment
+    ? matches.filter((m) => m.recommendation?.recommendation === "recommend")
+    : matches.filter((m) => m.score >= CALIBRATION.scoreFloor);
+  const verifying = discernment
+    ? matches.filter((m) => m.recommendation?.recommendation === "verify")
+    : [];
+
+  // Whole-map verdict (discernment only): decouples the honest-no from "zero clear
+  // the floor" — one lucky marginal yields `thin_map` ("even our best is a
+  // stretch"), not a confident list.
+  const verdict = discernment
+    ? mapVerdict({
+        recommendCount: strong.length,
+        verifyCount: verifying.length,
+        maxScore: matches.reduce((mx, m) => Math.max(mx, m.score), 0),
+      })
+    : undefined;
+
+  // 5. The honest no. Weak field is a finding, not an empty state. Under
+  // discernment it fires on `no_fit` AND `thin_map` (§2 — "even our best is a
+  // stretch" still gets a you-may-be-better-served-elsewhere note); otherwise the
+  // legacy weakFieldThreshold drives it.
   // DEFENSIVE: this is an auxiliary narrative call — if it throws (429, timeout,
   // malformed JSON), degrade to omitting the finding rather than discarding the
   // entire computed `matches`/eligibility set. Mirrors the per-match screen()
   // wrapping above.
+  const wantWeakField = discernment
+    ? verdict === "no_fit" || verdict === "thin_map"
+    : strong.length < CALIBRATION.weakFieldThreshold;
   let weak: Awaited<ReturnType<typeof d.explainWeakField>> | undefined;
-  if (strong.length < CALIBRATION.weakFieldThreshold) {
+  if (wantWeakField) {
     try {
       // F3 — back the model's redirects with a few real named Utah/SBA programs.
       weak = ensureRealRedirects(await d.explainWeakField(profile, meter, signal));
@@ -410,11 +456,16 @@ export async function buildOpportunityMap(
     profile,
     followUps,
     summary: {
+      // Under discernment, high-potential counts only RECOMMENDED matches (the
+      // single biggest anti-over-generosity lever); `worthVerifying` keeps the
+      // marginal set visible so nothing is hidden.
       highPotential: strong.length,
+      ...(discernment ? { worthVerifying: verifying.length } : {}),
       fundingIdentified: strong.reduce((sum, m) => sum + (m.opportunity.fundingHigh ?? 0), 0),
       agencies: agencies.length,
       closingIn90Days: in90,
     },
+    ...(verdict ? { mapVerdict: verdict } : {}),
     matches,
     weakFieldFinding: weak,
     agencyIntelligence: agencies.slice(0, 5).map((agency) => ({

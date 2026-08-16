@@ -144,11 +144,32 @@ export const EligibilityDeterminationWithFreshnessSchema = z.object({
   freshness: FreshnessAnnotationSchema,
 });
 
+/**
+ * DISC (flag `discernment_layer`) — the ADVISORY per-match verdict + whole-map
+ * verdict (lib/recommend.ts). Additive + optional so cached/precomputed maps and
+ * every flag-off live map (which never carry them) validate unchanged. The
+ * recommendation is advisory and NEVER a definitive eligibility ruling (R8.4).
+ */
+export const RecommendationSchema = z.enum(["recommend", "verify", "do_not_recommend"]);
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+
+export const RecommendationResultSchema = z.object({
+  recommendation: RecommendationSchema,
+  label: z.string(),
+  basis: z.string(),
+});
+export type RecommendationResult = z.infer<typeof RecommendationResultSchema>;
+
+export const MapVerdictSchema = z.enum(["strong_map", "thin_map", "no_fit"]);
+export type MapVerdict = z.infer<typeof MapVerdictSchema>;
+
 export const MatchSchema = z.object({
   opportunity: OpportunitySchema,
   tier: TierSchema,
   score: z.number(),
   criteria: z.array(CriterionCheckSchema),
+  /** DISC — advisory recommend/verify/do-not-recommend verdict (flag-gated). */
+  recommendation: RecommendationResultSchema.optional(),
   // Narrative display strings written by an LLM whose JSON response is never
   // itself schema-validated (`lib/claude.ts` `parseJson()` is a raw parse +
   // cast). A real map can legitimately omit any of these four (e.g. a
@@ -216,11 +237,23 @@ export const OpportunityMapSchema = z.object({
   followUps: z.array(z.string()),
   summary: z.object({
     highPotential: z.number(),
+    /**
+     * DISC — count of `verify` matches, kept alongside `highPotential` so that
+     * recounting high-potential as recommend-only never HIDES the marginal set
+     * (honesty, not suppression). Optional; absent when the flag is off.
+     */
+    worthVerifying: z.number().optional(),
     fundingIdentified: z.number(),
     agencies: z.number(),
     closingIn90Days: z.number(),
   }),
   matches: z.array(MatchSchema),
+  /**
+   * DISC — the whole-map verdict (strong/thin/no-fit), so a single lucky marginal
+   * reads as "even our best is a stretch" rather than a confident list. Optional;
+   * absent when `discernment_layer` is off.
+   */
+  mapVerdict: MapVerdictSchema.optional(),
   /** Set when nothing clears the bar. This is a finding, not a failure. */
   weakFieldFinding: z
     .object({

@@ -44,7 +44,8 @@ export type FlagName =
   | "d3_funding_strategy"
   | "d5_alerts"
   | "r5_deep_analysis"
-  | "e3_two_pass";
+  | "e3_two_pass"
+  | "discernment_layer";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -228,5 +229,15 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "candidates keep their Pass-A score so tiers still compute. Scoring bands (tierFromScore) are " +
       "unchanged, so the honest-no is untouched.",
     envVar: "NEXT_PUBLIC_FLAG_E3_TWO_PASS",
+  },
+  discernment_layer: {
+    name: "discernment_layer",
+    requirement: "DISC",
+    description:
+      "Matching discernment: an advisory per-match verdict (recommend / verify / do-not-recommend) plus a " +
+      "whole-map verdict (strong/thin/no-fit), derived purely from the score, the model's own met-criteria, " +
+      "and any FOUNDER-STATED disqualifier. Recounts 'high potential' as recommend-only and raises the bar " +
+      "per instrument type. Advisory, never an eligibility ruling (R8.4); default OFF until golden-set validated.",
+    envVar: "NEXT_PUBLIC_FLAG_DISCERNMENT_LAYER",
   },
 };
