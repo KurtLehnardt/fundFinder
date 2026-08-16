@@ -16,6 +16,8 @@ import {
   FOUNDER_TODO_SCAN,
   type AssembledPackage,
 } from "@/lib/apply/package";
+import { buildEnvelope, exportFileName, EXTENSION_EXPORT_COPY } from "@/lib/apply/export";
+import { isFlagEnabled } from "@/lib/flags";
 import type { DraftSection } from "@/lib/contracts/applicationDraft";
 import type { PrefilledField } from "@/lib/contracts/applicationForms";
 import type { BudgetLineItem } from "@/lib/contracts/applicationBudget";
@@ -334,6 +336,97 @@ function AorHandoffSection() {
 }
 
 // ---------------------------------------------------------------------------
+// (7) Export for the browser autofill extension (T7) — gated behind
+// r6_export_autofill (default OFF). Client-side ONLY: re-serializes the
+// AssembledPackage already rendered above into a signed .granted.json
+// envelope (see lib/apply/export.ts). No fetch, no server route, nothing
+// retained (northstar §5.3) — it is exactly the data already on this screen,
+// repackaged for the founder to hand to the browser extension themselves.
+// ---------------------------------------------------------------------------
+
+type ExportStatus = "idle" | "working" | "downloaded" | "error";
+type CopyStatus = "idle" | "copied" | "error";
+
+function ExportForExtensionSection({ pkg }: { pkg: AssembledPackage }) {
+  const [downloadStatus, setDownloadStatus] = useState<ExportStatus>("idle");
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+
+  const handleDownload = useCallback(async () => {
+    setDownloadStatus("working");
+    try {
+      const envelope = await buildEnvelope(pkg);
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = exportFileName(pkg);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+      setDownloadStatus("downloaded");
+    } catch {
+      setDownloadStatus("error");
+    }
+  }, [pkg]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      const envelope = await buildEnvelope(pkg);
+      await navigator.clipboard.writeText(JSON.stringify(envelope));
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  }, [pkg]);
+
+  return (
+    <section className="mt-6 rounded-lg bg-canvas px-5 py-5">
+      <p className={eyebrowClass}>{EXTENSION_EXPORT_COPY.eyebrow}</p>
+      <h3 className="mt-1 font-display text-[16px] font-bold leading-snug text-foreground">
+        {EXTENSION_EXPORT_COPY.headline}
+      </h3>
+      <p className={`mt-2 ${bodyClass}`}>{EXTENSION_EXPORT_COPY.body}</p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="rounded-sm bg-action px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-token-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+        >
+          {downloadStatus === "working" ? "Preparing…" : EXTENSION_EXPORT_COPY.downloadCta}
+        </button>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded-sm border border-structure-on-canvas px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-structure-on-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-offset-2"
+        >
+          {copyStatus === "copied" ? "Copied" : EXTENSION_EXPORT_COPY.copyCta}
+        </button>
+        {downloadStatus === "downloaded" && (
+          <span className={sourceNoteClass} aria-live="polite">
+            Downloaded — nothing was submitted or sent anywhere.
+          </span>
+        )}
+        {downloadStatus === "error" && (
+          <span className={sourceNoteClass} aria-live="polite">
+            Couldn&rsquo;t prepare the export — please try again.
+          </span>
+        )}
+        {copyStatus === "error" && (
+          <span className={sourceNoteClass} aria-live="polite">
+            Couldn&rsquo;t copy to clipboard — please try again.
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Pure view
 // ---------------------------------------------------------------------------
 
@@ -369,6 +462,7 @@ export function ApplicationPackageView({
 
       <GapSummarySection pkg={pkg} />
       <AorHandoffSection />
+      {isFlagEnabled("r6_export_autofill") && <ExportForExtensionSection pkg={pkg} />}
 
       {onClose && (
         <div className="mt-6 flex flex-wrap items-center gap-4">
