@@ -25,6 +25,77 @@ const EXTRACT_PROFILE_V1_TEMPLATE = "You extract structured company profiles for
 
 const EXPLAIN_MATCHES_V1_TEMPLATE = "You assess fit between a startup and federal funding opportunities.\n\nReturn ONLY a JSON array, no preamble, no markdown fences:\n[{\n  \"id\": string,\n  \"score\": number,          // 0-100\n  \"tier\": \"likely\"|\"verify\"|\"adjacent\"|\"none\",\n  \"criteria\": [{\"label\": string, \"met\": boolean, \"note\": string}],\n  \"whyFit\": string,\n  \"whyIneligible\": string,\n  \"whatToVerify\": string,\n  \"whatToDoNext\": string\n}]\n\nRULES THAT MATTER MORE THAN COVERAGE:\n\n1. You are NOT determining eligibility. Never state a definitive\n   determination. Use \"appears to align\", \"you may qualify\", \"verify with the\n   program officer\". This is required.\n\n2. whyIneligible must contain SPECIFIC, REAL concerns drawn from the actual\n   program and this actual company — never boilerplate, never empty. If you\n   cannot name a concrete concern, the match is weaker than you scored it.\n\n3. BE WILLING TO SAY NO. A company that does not fit federal grant mechanisms\n   should receive \"none\" tiers and low scores. Fabricating plausible-sounding\n   matches is the single worst failure mode here. Consumer marketplaces,\n   local service businesses, and companies with no R&D component frequently\n   have no strong federal grant match — say so plainly.\n\n4. criteria: 4-6 checks a program officer would actually apply (US-based small\n   business, active R&D component, technology area alignment, funding amount\n   consistent with program, commercialization potential, eligibility category).\n   Mark met honestly. Unmet criteria are informative, not failures to hide.\n\n5. Write for a founder, not a bureaucrat. Plain language. No jargon left\n   untranslated.";
 
+/**
+ * C2 (@v2) — adds a first-class `whyCare` field, DISTINCT from `whyFit`.
+ * `whyFit`/`whyIneligible`/`whatToVerify`/`whatToDoNext` (rules 1/3/4/5 below,
+ * renumbered from v1's 1/2/4/5) are byte-preserved; only the JSON shape (one
+ * new key) and the rule set (one new rule, inserted as rule 2) changed.
+ *
+ * Why a distinct field instead of folding this into `whyFit`: `whyFit` answers
+ * "does this program's funding purpose line up with this company" — a
+ * grant-shaped question that reads as a non sequitur on a procurement listing
+ * (a contract vehicle isn't something a company "fits" the way a grant NOFO
+ * is). `whyCare` answers the prior, more general question — "should this
+ * founder even spend attention here" — and its answer legitimately differs by
+ * `kind`: for a grant/R&D opportunity it's the fit signal; for a procurement
+ * or adjacent listing it's the strategic-value signal (government as a
+ * customer), which `whyFit` has no vocabulary for. Keeping them separate lets
+ * a procurement card lead with the honest reason to care instead of a
+ * strained "fit" claim.
+ */
+const EXPLAIN_MATCHES_V2_TEMPLATE = `You assess fit between a startup and federal funding opportunities.
+
+Return ONLY a JSON array, no preamble, no markdown fences:
+[{
+  "id": string,
+  "score": number,          // 0-100
+  "tier": "likely"|"verify"|"adjacent"|"none",
+  "criteria": [{"label": string, "met": boolean, "note": string}],
+  "whyCare": string,
+  "whyFit": string,
+  "whyIneligible": string,
+  "whatToVerify": string,
+  "whatToDoNext": string
+}]
+
+RULES THAT MATTER MORE THAN COVERAGE:
+
+1. You are NOT determining eligibility. Never state a definitive
+   determination. Use "appears to align", "you may qualify", "verify with the
+   program officer". This is required.
+
+2. whyCare is a DISTINCT field from whyFit — never just reword whyFit into a
+   second sentence. What it says depends on the candidate's "kind":
+   - For a "grant" or "rd" opportunity, whyCare answers "why you may fit":
+     one sentence naming the specific alignment between this company and this
+     program's funding purpose.
+   - For a "procurement" opportunity, or an "assistance" listing whose real
+     value is government-as-customer rather than a funding match, whyCare
+     answers a different question — "why this matters to you": one sentence
+     on the strategic value of the government as a customer (a revenue
+     channel, a past-performance credential, market validation, a foothold
+     competitors don't have). Do not phrase this one as fit or eligibility.
+   Always exactly one plain-language sentence. Rule 1 applies here too — hedge
+   ("could open the door to"), never assert ("will win you").
+
+3. whyIneligible must contain SPECIFIC, REAL concerns drawn from the actual
+   program and this actual company — never boilerplate, never empty. If you
+   cannot name a concrete concern, the match is weaker than you scored it.
+
+4. BE WILLING TO SAY NO. A company that does not fit federal grant mechanisms
+   should receive "none" tiers and low scores. Fabricating plausible-sounding
+   matches is the single worst failure mode here. Consumer marketplaces,
+   local service businesses, and companies with no R&D component frequently
+   have no strong federal grant match — say so plainly.
+
+5. criteria: 4-6 checks a program officer would actually apply (US-based small
+   business, active R&D component, technology area alignment, funding amount
+   consistent with program, commercialization potential, eligibility category).
+   Mark met honestly. Unmet criteria are informative, not failures to hide.
+
+6. Write for a founder, not a bureaucrat. Plain language. No jargon left
+   untranslated.`;
+
 const EXPLAIN_WEAK_FIELD_V1_TEMPLATE = "A startup has no strong federal grant matches. That is a legitimate\nand useful finding — deliver it with confidence, not apology.\n\nReturn ONLY JSON, no fences:\n{\n  \"headline\": string,      // one sentence, direct\n  \"reasoning\": string,     // 2-4 sentences: why this company profile does not\n                           // align with how federal grant mechanisms work\n  \"redirects\": [{\"label\": string, \"why\": string}]  // 3-5 concrete alternatives\n}\n\nRedirects should be specific and real: SBA programs, state economic\ndevelopment, local/community development, workforce and education funding,\nprocurement as a government customer, university partnerships. Name the\ncategory and say why it fits better than federal R&D grants.\n\nDo not hedge into implying they should apply anyway. The value here is saving\nthem weeks of wasted applications.";
 
 /**
@@ -171,7 +242,7 @@ Aim for 3-5 questions when the description leaves gates or routing open; return 
 
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
-  explainMatches: definePrompt("explainMatches", "v1", EXPLAIN_MATCHES_V1_TEMPLATE),
+  explainMatches: definePrompt("explainMatches", "v2", EXPLAIN_MATCHES_V2_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
   generateInterviewQuestions: definePrompt(
     "generateInterviewQuestions",

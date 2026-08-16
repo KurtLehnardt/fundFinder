@@ -1,27 +1,40 @@
 #!/usr/bin/env node
 /**
- * check-prompt-registry — flags model-prompt strings written inline in
- * application code instead of living in `lib/prompts/registry.ts` (CON-04,
- * R10.2: "prompts are not edited inline in application code").
+ * check-prompt-registry — two checks over the prompt registry (CON-04,
+ * R10.2), both exit-1-on-violation:
  *
- * Scope: any call that looks like an Anthropic SDK message-creation call
- * (`....messages.create({ ... })`) anywhere under `lib/` or `app/`, excluding
- * `lib/prompts/**` (the registry itself, which is allowed to hold prompt
- * text). Within such a call:
+ * 1. INLINE-PROMPT CHECK. Flags model-prompt strings written inline in
+ *    application code instead of living in `lib/prompts/registry.ts`
+ *    ("prompts are not edited inline in application code").
  *
- *   - a `system` property whose value is a literal (string / template
- *     literal), rather than a reference to a registry-loaded value
- *     (e.g. `loadPrompt(id).template`), is flagged.
- *   - a message `content` property that is a fully static string/template
- *     literal (no `${...}` interpolation) over a length threshold is
- *     flagged — a real user/data payload always interpolates request data,
- *     so a long *static* literal here is almost certainly a hand-written
- *     prompt that should be registered instead.
+ *    Scope: any call that looks like an Anthropic SDK message-creation call
+ *    (`....messages.create({ ... })`) anywhere under `lib/` or `app/`,
+ *    excluding `lib/prompts/**` (the registry itself, which is allowed to
+ *    hold prompt text). Within such a call:
  *
- * This intentionally does NOT flag ordinary long strings elsewhere in the
- * codebase (UI copy, sample text, etc.) — only literals passed directly into
- * an SDK message-creation call, which is where an inline prompt would
- * actually reach the model.
+ *      - a `system` property whose value is a literal (string / template
+ *        literal), rather than a reference to a registry-loaded value
+ *        (e.g. `loadPrompt(id).template`), is flagged.
+ *      - a message `content` property that is a fully static string/template
+ *        literal (no `${...}` interpolation) over a length threshold is
+ *        flagged — a real user/data payload always interpolates request
+ *        data, so a long *static* literal here is almost certainly a
+ *        hand-written prompt that should be registered instead.
+ *
+ *    This intentionally does NOT flag ordinary long strings elsewhere in the
+ *    codebase (UI copy, sample text, etc.) — only literals passed directly
+ *    into an SDK message-creation call, which is where an inline prompt
+ *    would actually reach the model.
+ *
+ * 2. BANNED-PHRASINGS CHECK (C2). Flags definitive-eligibility language in
+ *    any registered prompt template. This product NEVER determines
+ *    eligibility (R8 / `explainMatches` rule 1: "appears to align", "you may
+ *    qualify", "verify with the program officer" — never an assertion of
+ *    fact). A prompt that tells the model it's fine to say "you are
+ *    eligible" or "guaranteed" would undo that guarantee at the source, so
+ *    this scans every `*_TEMPLATE` constant in `lib/prompts/registry.ts`
+ *    (every version, active or historical) for `BANNED_PHRASES` below —
+ *    case-insensitive substring match.
  *
  * Usage: node scripts/check-prompt-registry.mjs
  * Exit code 0 = clean, 1 = violations found (or scan error).
@@ -34,6 +47,23 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const SCAN_DIRS = ["lib", "app"];
 const EXCLUDE_DIR_PARTS = ["node_modules", ".next", "lib/prompts"];
 const LONG_STATIC_CONTENT_THRESHOLD = 120; // chars
+
+/**
+ * Definitive-eligibility language a prompt template must never contain —
+ * these read as the model making a determination instead of a hedged
+ * assessment (R8 / explainMatches rule 1). Each entry is matched as a plain
+ * case-insensitive substring (not a regex), so the list stays auditable at a
+ * glance. Extend this list rather than adding a second check — this IS the
+ * check:prompts machinery.
+ */
+export const BANNED_PHRASES = [
+  "you qualify",
+  "you are eligible",
+  "you're eligible",
+  "guaranteed",
+  "you will receive",
+  "you will be awarded",
+];
 
 /** @param {string} dir */
 function walk(dir, out = []) {
@@ -131,21 +161,92 @@ function checkFile(filePath) {
   return violations.map((v) => ({ file: relPath, ...v }));
 }
 
+/** Case-insensitive substring scan of `text` against `BANNED_PHRASES`. Exported for tests. */
+export function findBannedPhrases(text) {
+  const lower = text.toLowerCase();
+  return BANNED_PHRASES.filter((phrase) => lower.includes(phrase));
+}
+
+/**
+ * Banned-phrasings check, operating on already-loaded SOURCE TEXT rather than
+ * a file path — this is what makes it directly unit-testable with a seeded
+ * string (see scripts/__tests__/check-prompt-registry.test.ts) without
+ * needing a real file on disk.
+ *
+ * Scans every top-level `const FOO_TEMPLATE = "..."` / `` `...` `` declaration
+ * (any `_TEMPLATE`-suffixed identifier — this matches every prompt constant
+ * in lib/prompts/registry.ts, active version or historical, e.g.
+ * EXTRACT_PROFILE_V1_TEMPLATE, EXPLAIN_MATCHES_V2_TEMPLATE) for BANNED_PHRASES.
+ */
+export function checkBannedPhrasingsInSource(source, filePath) {
+  const relPath = relative(ROOT, filePath);
+  const sf = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const violations = [];
+
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.name &&
+      ts.isIdentifier(node.name) &&
+      /_TEMPLATE$/.test(node.name.text) &&
+      node.initializer &&
+      isStringish(node.initializer)
+    ) {
+      const text = textOf(node.initializer);
+      for (const phrase of findBannedPhrases(text)) {
+        violations.push({
+          file: relPath,
+          line: lineOf(sf, node.initializer.getStart()),
+          reason: `banned definitive-eligibility phrase "${phrase}" in ${node.name.text} — this product never presents a definitive eligibility determination (see BANNED_PHRASES in scripts/check-prompt-registry.mjs)`,
+          preview: phrase,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+
+  return violations;
+}
+
+/** Reads `filePath` and runs `checkBannedPhrasingsInSource` on its contents. */
+export function checkBannedPhrasingsInFile(filePath) {
+  return checkBannedPhrasingsInSource(readFileSync(filePath, "utf8"), filePath);
+}
+
 function main() {
   const files = SCAN_DIRS.flatMap((d) => walk(join(ROOT, d)));
-  const allViolations = files.flatMap(checkFile);
+  const inlineViolations = files.flatMap(checkFile);
+
+  const registryPath = join(ROOT, "lib", "prompts", "registry.ts");
+  const bannedViolations = checkBannedPhrasingsInFile(registryPath);
+
+  const allViolations = [...inlineViolations, ...bannedViolations];
 
   if (allViolations.length === 0) {
-    console.log(`check-prompt-registry: OK — no inline prompt strings found outside lib/prompts/ (scanned ${files.length} files).`);
+    console.log(
+      `check-prompt-registry: OK — no inline prompt strings found outside lib/prompts/ (scanned ${files.length} files), and no banned definitive-eligibility phrasings in lib/prompts/registry.ts.`,
+    );
     process.exit(0);
   }
 
-  console.error(`check-prompt-registry: found ${allViolations.length} inline prompt string(s) outside the registry:\n`);
+  console.error(`check-prompt-registry: found ${allViolations.length} violation(s):\n`);
   for (const v of allViolations) {
     console.error(`  ${v.file}:${v.line}  ${v.reason}\n    "${v.preview}${v.preview.length >= 60 ? "…" : ""}"`);
   }
-  console.error("\nRegister these in lib/prompts/registry.ts (see extractProfile/explainMatches/explainWeakField for the pattern) and load them via loadPrompt(id).template.");
+  if (inlineViolations.length > 0) {
+    console.error("\nRegister inline prompts in lib/prompts/registry.ts (see extractProfile/explainMatches/explainWeakField for the pattern) and load them via loadPrompt(id).template.");
+  }
+  if (bannedViolations.length > 0) {
+    console.error("\nRemove or rephrase banned definitive-eligibility language in the flagged prompt template(s) — hedge instead (\"appears to align\", \"you may qualify\", \"verify with the program officer\").");
+  }
   process.exit(1);
 }
 
-main();
+// Run only when executed directly (`node scripts/check-prompt-registry.mjs`),
+// not when imported as a module (e.g. by the test file, which needs the
+// exported functions without triggering `process.exit()`).
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  main();
+}

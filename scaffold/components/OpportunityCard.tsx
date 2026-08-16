@@ -139,6 +139,16 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
 
   const dtClass = design ? "inline text-foreground" : "inline text-slate-550";
 
+  // C2: whyCare leads the card, ABOVE THE FOLD (in the always-visible header,
+  // not behind the `open` toggle) — distinct from whyFit, which stays in the
+  // collapsible details below. For a grant/rd candidate whyCare is "why you
+  // may fit"; for a procurement/adjacent candidate it's "why this matters to
+  // you" (government-as-customer strategic value) — see the explainMatches
+  // v2 prompt (lib/prompts/registry.ts) rule 2.
+  const whyCareClass = design
+    ? "mt-2 text-pretty font-body text-[14px] leading-relaxed text-foreground"
+    : "mt-2 font-body text-[14px] leading-relaxed";
+
   const forecastedClass = design
     ? "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-on-semantic"
     : "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550";
@@ -226,6 +236,7 @@ export default function OpportunityCard({ m, index }: { m: Match; index: number 
             )}
             <h3 className={titleClass}>{o.program}</h3>
             <p className={agencyClass}>{o.agency}</p>
+            {m.whyCare?.trim() && <p className={whyCareClass}>{m.whyCare}</p>}
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
