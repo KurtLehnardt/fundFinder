@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCostMeter } from "@/lib/metering/meter";
 import { analyzeCompetitors, InsufficientEvidenceError } from "@/lib/competitors/analyze";
+import type { CompetitorStreamEvent } from "@/lib/contracts/competitorAnalysis";
 
 /**
  * R5-deep — live "competitor & grant intelligence" market brief.
@@ -84,33 +85,80 @@ export async function POST(req: NextRequest) {
   const meter = createCostMeter();
   const controller = new AbortController();
   const budget = setTimeout(() => controller.abort(new Error("budget")), BUDGET_MS);
-
-  try {
-    const analysis = await analyzeCompetitors({
-      persona,
-      personaDescription: description,
-      keywords,
-      opportunity,
-      meter,
-      signal: controller.signal,
-    });
-    const cost = meter.summary();
-    return NextResponse.json({
-      ok: true,
-      analysis: { ...analysis, cost: { totalCostUsd: Number(cost.totalCostUsd.toFixed(4)), pricingAsOf: cost.pricingAsOf } },
-    });
-  } catch (err: any) {
-    // Insufficient grounded evidence, or Anthropic/OpenAI unavailable → an HONEST
-    // degradation the client renders as a fall-back-to-demo note (never fabricate).
-    const insufficient = err instanceof InsufficientEvidenceError;
-    return NextResponse.json({
-      ok: false,
-      reason: insufficient ? "insufficient_evidence" : "unavailable",
-      message: insufficient
-        ? "Not enough grounded public award data was found for a reliable live brief."
-        : "Live analysis is temporarily unavailable.",
-    });
-  } finally {
-    clearTimeout(budget);
+  // Stop billing tokens if the client disconnects mid-stream.
+  const reqSignal = (req as NextRequest & { signal?: AbortSignal }).signal;
+  if (reqSignal) {
+    if (reqSignal.aborted) controller.abort();
+    else reqSignal.addEventListener("abort", () => controller.abort(), { once: true });
   }
+
+  // Stream NDJSON (one JSON object per line, mirroring /api/match): `stage` +
+  // `evidence` progress events flow as the pipeline runs, then a final `result`
+  // (or an honest `error`). The synthesized brief only leaves here on `result`,
+  // AFTER groundSynthesis + schema validation inside analyzeCompetitors — so the
+  // anti-fabrication boundary is exactly as before; only progress got earlier.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(streamController) {
+      const send = (obj: CompetitorStreamEvent) => {
+        try {
+          streamController.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+        } catch {
+          /* stream already closed — ignore */
+        }
+      };
+      try {
+        const analysis = await analyzeCompetitors({
+          persona,
+          personaDescription: description,
+          keywords,
+          opportunity,
+          meter,
+          signal: controller.signal,
+          onEvent: send,
+        });
+        const cost = meter.summary();
+        send({
+          type: "result",
+          ok: true,
+          analysis: {
+            ...analysis,
+            cost: { totalCostUsd: Number(cost.totalCostUsd.toFixed(4)), pricingAsOf: cost.pricingAsOf },
+          },
+        });
+      } catch (err) {
+        // Insufficient grounded evidence, or Anthropic/OpenAI unavailable → an HONEST
+        // degradation the client renders as a fall-back-to-demo note (never fabricate).
+        const insufficient = err instanceof InsufficientEvidenceError;
+        send({
+          type: "error",
+          ok: false,
+          reason: insufficient ? "insufficient_evidence" : "unavailable",
+          message: insufficient
+            ? "Not enough grounded public award data was found for a reliable live brief."
+            : "Live analysis is temporarily unavailable.",
+        });
+      } finally {
+        clearTimeout(budget);
+        try {
+          streamController.close();
+        } catch {
+          /* already closed */
+        }
+      }
+    },
+    cancel() {
+      // Consumer tore down (closed the modal / navigated away) — abort the run.
+      controller.abort();
+      clearTimeout(budget);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
