@@ -9,6 +9,11 @@ import CompetitorAnalysisModal from "@/components/CompetitorAnalysisModal";
 import { useSettingsPanel } from "@/components/AppMenu";
 import { useBilling } from "@/components/BillingProvider";
 import { isFlagEnabled } from "@/lib/flags";
+import {
+  opportunityAvailability,
+  isClosingSoon,
+  type OpportunityAvailabilityKind,
+} from "@/lib/ui/opportunitySummary";
 
 const money = (n: number) =>
   n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`;
@@ -196,6 +201,17 @@ export default function OpportunityCard({
   const value = fundingRange(o);
   const kindLabel = KIND_LABEL[o.kind] ?? o.kind;
 
+  // F1 — forecasted-vs-current (N3): the single honest availability read for
+  // this card (lib/ui/opportunitySummary.ts). "open" renders no badge at all
+  // (the Deadline field below already speaks for it, unchanged from before
+  // this task) — only the notable, non-default states (forecasted / rolling /
+  // closed) get an explicit label, so a forecasted or evergreen program is
+  // never left to be misread as a normal dated listing.
+  const availability = opportunityAvailability(o);
+  // Evergreen-safe (F1): never true for a rolling/continuous/standing or
+  // closed program, even if a stray deadline value is present on the record.
+  const closingSoon = isClosingSoon(o);
+
   // AUTHORITY: the deterministic screening determination is the source of truth
   // for eligibility on this card (§1 #5). It may be absent (screening omitted /
   // errored for this match) — the card degrades to the narrative-only view.
@@ -245,13 +261,57 @@ export default function OpportunityCard({
     ? "mt-2 text-pretty font-body text-[14px] leading-relaxed text-foreground"
     : "mt-2 font-body text-[14px] leading-relaxed";
 
-  const forecastedClass = design
-    ? "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-on-semantic"
+  // F1 — availability badge per non-default kind. "forecasted" keeps the
+  // pre-existing bg-info style byte-for-byte; "rolling" reuses the same
+  // bordered-chip token pairing as the Auto Apply button (structure-on-canvas
+  // is documented AA-safe as small text/borders directly on canvas — see
+  // lib/design/tokens.ts); "closed" reuses the same filled error chip as the
+  // "Excluded" eligibility bucket (DETERMINATION_META.excluded, above).
+  const AVAILABILITY_BADGE: Record<
+    Exclude<OpportunityAvailabilityKind, "open">,
+    { text: string; className: string }
+  > = design
+    ? {
+        forecasted: {
+          text: "Forecasted",
+          className: "rounded-sm bg-info px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-on-semantic",
+        },
+        rolling: {
+          text: "Rolling",
+          className:
+            "rounded-sm border border-structure-on-canvas px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-structure-on-canvas",
+        },
+        closed: {
+          text: "Closed",
+          className: "rounded-sm bg-error px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-token-white",
+        },
+      }
+    : {
+        forecasted: {
+          text: "Forecasted",
+          className: "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550",
+        },
+        rolling: {
+          text: "Rolling",
+          className: "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550",
+        },
+        closed: {
+          text: "Closed",
+          className: "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550",
+        },
+      };
+
+  // F1 — evergreen-safe "closing soon" chip (never rendered for a rolling/
+  // continuous/standing/closed program; see isClosingSoon above). Filled
+  // warning chip — the same AA-safe pairing as the other semantic badges,
+  // never a bare border/inline-text use of the token (lib/design/tokens.ts).
+  const closingSoonClass = design
+    ? "rounded-sm bg-warning px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-on-semantic"
     : "rounded-sm border border-rule px-1.5 py-0.5 text-[10px] uppercase tracking-eyebrow text-slate-550";
 
   const detailsClass = design
-    ? "reveal border-t border-structure-on-canvas px-6 pb-6 pt-5"
-    : "reveal border-t border-rule px-6 pb-6 pt-5";
+    ? "reveal border-t border-structure-on-canvas px-4 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5"
+    : "reveal border-t border-rule px-4 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5";
 
   const criterionMetClass = design ? "text-structure-on-canvas" : "text-fit-strong";
   const criterionMutedClass = design ? "text-foreground" : "text-slate-550";
@@ -287,15 +347,15 @@ export default function OpportunityCard({
   // own border on all sides, so an outside offset would bleed the ring past
   // the card edge.
   const headerToggleClass = design
-    ? "w-full px-6 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset"
-    : "w-full px-6 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset";
+    ? "w-full px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-structure-on-canvas focus-visible:ring-inset sm:px-6 sm:py-5"
+    : "w-full px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-federal focus-visible:ring-inset sm:px-6 sm:py-5";
 
   // FE-06: the locked Auto Apply control is a secondary/structure affordance —
   // never bg-action (reserved for the primary CTA). Sits in its own row, own
   // <button>, outside the header's full-width toggle button (see below).
   const autoApplyRowClass = design
-    ? "flex flex-wrap items-center gap-2 border-t border-structure-on-canvas px-6 py-3"
-    : "flex flex-wrap items-center gap-2 border-t border-rule px-6 py-3";
+    ? "flex flex-wrap items-center gap-2 border-t border-structure-on-canvas px-4 py-3 sm:px-6"
+    : "flex flex-wrap items-center gap-2 border-t border-rule px-4 py-3 sm:px-6";
 
   // Polish: real hover + a 40px min hit target (dense-desktop control), plus
   // optical padding (icon side 2px tighter than the text side).
@@ -327,7 +387,10 @@ export default function OpportunityCard({
         aria-expanded={open}
         className={headerToggleClass}
       >
-        <div className="flex items-start justify-between gap-6">
+        {/* Mobile pass (N4): flex-wrap lets the score/chevron block drop to
+            its own line under the title on narrow widths instead of being
+            squeezed into a shrink-0 column beside a long program title. */}
+        <div className="flex flex-wrap items-start justify-between gap-4 sm:flex-nowrap sm:gap-6">
           <div className="min-w-0">
             {design ? (
               <span className={`inline-block rounded-sm px-2 py-0.5 font-mono text-[11px] uppercase tracking-eyebrow ${badgeClass}`}>
@@ -360,7 +423,7 @@ export default function OpportunityCard({
           </div>
         </div>
 
-        <dl className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 font-mono text-[12px] tabular-nums">
+        <dl className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[12px] tabular-nums sm:gap-x-8">
           {value && (
             <div>
               <dt className={dtClass}>Value </dt>
@@ -373,11 +436,17 @@ export default function OpportunityCard({
               <dd className="inline">{o.deadline}</dd>
             </div>
           )}
-          {o.forecasted && (
-            <span className={forecastedClass}>
-              Forecasted
+          {/* F1 (N3) — forecasted-vs-current: the only non-default availability
+              states get an explicit badge; "open" stays unbadged (the Deadline
+              field above already implies it), unchanged from before this task. */}
+          {availability && availability.kind !== "open" && (
+            <span className={AVAILABILITY_BADGE[availability.kind].className}>
+              {AVAILABILITY_BADGE[availability.kind].text}
             </span>
           )}
+          {/* F1 — evergreen-safe closing-soon flag; never renders for a
+              rolling/continuous/standing or closed program (isClosingSoon). */}
+          {closingSoon && <span className={closingSoonClass}>Closing soon</span>}
           <div>
             <dt className={dtClass}>Type </dt>
             <dd className="inline">{kindLabel}</dd>
@@ -495,7 +564,7 @@ export default function OpportunityCard({
           {m.history && (
             <div className={historyBorderClass}>
               <p className={eyebrowClass(design, "mb-3")}>Similar companies funded</p>
-              <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3">
+              <div className="mb-4 flex flex-wrap gap-x-5 gap-y-3 sm:gap-x-8">
                 <Stat design={design} n={m.history.similarCompanies} label="similar companies" />
                 <Stat design={design} n={money(m.history.totalAwarded)} label="total awarded" />
                 <Stat design={design} n={money(m.history.medianAward)} label="median award" />
