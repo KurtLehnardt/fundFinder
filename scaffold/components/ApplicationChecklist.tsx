@@ -31,12 +31,14 @@ export const REQUIREMENTS: Array<{ key: RequirementKey; label: string; detail: s
   {
     key: "sam",
     label: "Active SAM.gov registration",
-    detail: "The federal government's vendor registry — most awards can't be paid out without it.",
+    detail:
+      "The federal government's vendor registry. It must be completed and show status “Active” — not just started — before you can apply or be paid. A brand-new registration can take up to ~2 weeks to finish, and it must be renewed every year.",
   },
   {
     key: "uei",
     label: "UEI (Unique Entity Identifier)",
-    detail: "Your organization's federal ID number, issued when you register in SAM.gov.",
+    detail:
+      "Your organization's 12-character federal ID, assigned when you begin a SAM.gov registration. Having a UEI alone is not enough — grant portals will reject it (“no organization matches this UEI”) until your SAM.gov registration is Active.",
   },
   {
     key: "aor",
