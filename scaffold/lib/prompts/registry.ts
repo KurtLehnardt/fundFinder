@@ -309,12 +309,66 @@ GUIDANCE:
 - If a whole array has nothing grounded in the text, you may either return an empty array [] or a single item with "specified": false and the sentinel value. Do not pad arrays with invented items to look complete.
 - Write prompts and labels for a founder, not a bureaucrat: plain language, no unexplained jargon.`;
 
+/**
+ * WS-G / G2 — grounded narrative drafting (the consuming module is
+ * `lib/apply/draft.ts`). Given ONE application section (its title + prompt, from
+ * G1's `ApplicationRequirements`) and the founder's provided `CompanyProfile`
+ * fields, draft that section — grounded ONLY in the profile fields supplied.
+ *
+ * THE ONE RULE THAT MATTERS MORE THAN A COMPLETE-LOOKING DRAFT — GROUND EVERY
+ * CLAIM, INVENT NOTHING: every factual sentence carries the exact profile field
+ * key it came from (`claims`); any fact NOT in the profile becomes an inline
+ * `[founder to provide: …]` placeholder (`gaps`), never a made-up specific. The
+ * model also never asserts eligibility or that funding is/will be awarded — it
+ * hedges. `validateDraftGrounding` in draft.ts re-checks all of this against the
+ * profile as defense-in-depth (`isFieldProvided` + the placeholder shape + the
+ * reused `findBannedPhrases` guard), so a slip is neutralized before it ships.
+ *
+ * Authored here (new prompt), so it is NOT in `V1_BASELINE_HASHES` (that set is
+ * the historical anchor for the three prompts migrated verbatim out of
+ * `lib/claude.ts`). Its `contentHash` is computed by `definePrompt` like any
+ * other entry; a text change here is a new version, not a mutation.
+ */
+const DRAFT_APPLICATION_SECTION_V1_TEMPLATE = `You draft ONE narrative section of a federal grant / SBIR application for a founder, using ONLY the facts in the provided company profile.
+
+You are given a single application section (its key, title, and the prompt the applicant must answer) and the founder's company profile as a JSON object whose keys are profile field names (e.g. "raw_text", "industry", "technology", "location", "use_of_funds", "rd_activities", "revenue"). The profile object contains ONLY the fields the founder has actually provided — a field that is missing simply is not there.
+
+THE ONE RULE THAT OVERRIDES EVERYTHING — GROUND EVERY CLAIM, INVENT NOTHING:
+- Write the section answering its prompt in a plain first-person-plural founder voice ("we", "our"). Keep it concise — a few short paragraphs at most.
+- Every sentence that states a FACT about the company (what it does, its technology, market, location, stage, revenue, capital, R&D, customers, use of funds) must be grounded in a field that is present in the provided profile object. For each such sentence, add an entry to "claims" with the exact sentence in "text" and the exact profile field key it came from in "profile_field".
+- If answering the prompt needs a fact that is NOT present in the provided profile, DO NOT invent it and DO NOT guess a plausible value. Instead put an inline placeholder of EXACTLY this form inside draft_text: [founder to provide: <short plain description of the missing fact>] — for example [founder to provide: annual revenue] — and add a matching entry to "gaps". Never write a number, name, date, dollar amount, or metric that is not in the profile.
+- Only cite a "profile_field" key that actually appears in the provided profile object. Never cite a field that is absent — if the fact is not there, it is a gap, not a claim.
+
+NEVER MAKE AN ELIGIBILITY OR AWARD CLAIM:
+- You are NOT determining eligibility and NOT promising money. Never state or imply that the application is or will be submitted, accepted, approved, or funded, or that the applicant meets the program's eligibility. Hedge instead: describe how the company's work "aligns with" or "fits" the program's stated goals, and leave the outcome to the program. Describe the company; do not predict the decision.
+
+Return ONLY a JSON object — no preamble, no markdown fences — of exactly this shape:
+{
+  "draft_text": string,
+  "claims": [
+    { "text": string, "profile_field": string }
+  ],
+  "gaps": [
+    { "field_hint": string, "placeholder": string }
+  ]
+}
+
+GUIDANCE:
+- Prefer FEWER, well-grounded sentences over padding. A short honest draft with clearly marked gaps is the goal — not a complete-looking draft resting on invented specifics.
+- Every placeholder you put in draft_text must also appear in "gaps", and every gap's "placeholder" must appear verbatim in draft_text.
+- Write for a founder, not a bureaucrat: plain language, no unexplained jargon.`;
+
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
   extractApplicationRequirements: definePrompt(
     "extractApplicationRequirements",
     "v1",
     EXTRACT_APPLICATION_REQUIREMENTS_V1_TEMPLATE,
+  ),
+  draftApplicationSection: definePrompt(
+    "draftApplicationSection",
+    "v1",
+    DRAFT_APPLICATION_SECTION_V1_TEMPLATE,
   ),
   explainMatches: definePrompt("explainMatches", "v2", EXPLAIN_MATCHES_V2_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
