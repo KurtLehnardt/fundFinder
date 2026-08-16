@@ -25,10 +25,21 @@ export const CALIBRATION = {
   candidateFloor: 0.22,
   /** How many candidates go to Claude for scoring. */
   candidateCount: 24,
-  /** Below this LLM score, a match is not shown as likely/verify. Gives the
-   *  flagship AI-health case margin (its NIH match scores 35-72 across runs)
-   *  while staying well clear of case 5's ~22 ceiling. */
-  scoreFloor: 30,
+  /** Verify/adjacent boundary. E1 re-derivation on the 968-opp MIXED corpus
+   *  RAISED this 30 -> 33 to keep case-5's core GRANT fit honestly weak. The C1a
+   *  per-type quota (NOT a low floor) is what makes non-grants REACHABLE; once
+   *  scored, genuine non-grant fits land well clear of 33 — case-1 health-IT
+   *  PROCUREMENT 35-42, case-3 SBIR/rd 35, case-2 procurement 38-52, case-4
+   *  rd/procurement 38-78. Meanwhile case-5's education/STEM GRANTS (NDEP STEM,
+   *  NSF "Fostering Innovation") oscillate up to ~32 run-to-run; at the old 30
+   *  they over-matched as STRONG grants in ~half of runs — a breach of the sacred
+   *  honest-no. 33 sits just above that grant-noise band, so case-5's borderline
+   *  grants render as (permitted) ADJACENT and its weak-field finding stays robust
+   *  while every genuinely-fitting non-grant still promotes. The residual
+   *  case-1↔case-5 overlap (case-1's non-grant occasionally dips to ~30) is the
+   *  tension the task anticipated: keep case-5 honest, do not over-fit case-1.
+   *  See docs/calibration-baseline.md for the per-case audit. */
+  scoreFloor: 33,
   /** If fewer than this many matches clear scoreFloor, declare a weak field.
    *  1 = weak field means ZERO strong matches — cleanly isolates the case-5
    *  "no honest match" finding from thin-but-real cases (e.g. case 1's single
@@ -92,9 +103,17 @@ const REAL_DEPS: BuildDeps = {
 };
 
 export function tierFromScore(score: number): Tier {
-  if (score >= 75) return "likely";
-  if (score >= CALIBRATION.scoreFloor) return "verify";
-  if (score >= 25) return "adjacent";
+  // E1: "likely" lowered 75 -> 60. On the 968-opp corpus NO match ever reaches
+  // 75 — the LLM's effective ceiling is ~72 and its prompt deliberately keeps
+  // scores conservative — so "likely" was a DEAD tier. 60 lets genuinely strong
+  // non-grant fits (case-2 procurement ~62, case-4 SBIR/rd ~72) reach the top
+  // tier: the "promote into verify/LIKELY" half of the E1 goal. Safe for case-5
+  // (its ceiling is ~32, far below 60). Bands: likely>=60, verify>=scoreFloor(33),
+  // adjacent>=25, none<25. `highPotential`/`strong` stay score>=scoreFloor, so
+  // likely⊂strong keeps the summary count and the component tier-filter consistent.
+  if (score >= 60) return "likely";
+  if (score >= CALIBRATION.scoreFloor) return "verify"; // >= 33 (E1)
+  if (score >= 25) return "adjacent"; // 25-32: houses case-5's permitted honest adjacents
   return "none";
 }
 
