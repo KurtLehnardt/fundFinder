@@ -69,6 +69,71 @@ export const GroundedAwardRecordSchema = z.object({
 export type GroundedAwardRecord = z.infer<typeof GroundedAwardRecordSchema>;
 
 /**
+ * R5-deep — a PRIVATE-company web profile from live web search (exa /
+ * WebSearch), for comparable companies that have NO federal award record
+ * (feasibility report §2 #5 / §6 Risk 2).
+ *
+ * These are the honest fallback for the "comparable companies" angle when the
+ * comparable is a private company with no public grant. Two invariants keep
+ * them honest and are STRUCTURALLY enforced here, not merely by convention:
+ *
+ *   1. There is DELIBERATELY NO `amount` field. A private web profile can never
+ *      carry a federal award figure, so a fabricated award is impossible to
+ *      even represent — the type won't hold one.
+ *   2. `sourceUrl` is a real, fetchable URL the user can click to verify the
+ *      profile, exactly like an award record's deep link.
+ *
+ * A web profile is cited by `id` the same way an award record is, but the
+ * renderer labels it "public web profile — not a federal awardee" so it is
+ * never confused with a grounded award.
+ */
+export const WebCompetitorProfileSchema = z.object({
+  /** Capture-assigned stable id the synthesis may cite (e.g. "web_1"). */
+  id: z.string().min(1),
+  /** Company / organization name, verbatim from the web result. */
+  company: z.string().min(1),
+  /** Real, fetchable public source URL the profile was drawn from. */
+  sourceUrl: z.string().url(),
+  /** A short description snippet drawn from the web result — the only evidence. */
+  snippet: z.string().min(1),
+  /** Which web tool surfaced this profile, for provenance. */
+  via: z.enum(["exa", "web_search"]).optional(),
+});
+export type WebCompetitorProfile = z.infer<typeof WebCompetitorProfileSchema>;
+
+/**
+ * Award-size statistics for the "typical award size" section of the brief.
+ * These are COMPUTED DETERMINISTICALLY from `records[].amount` server-side (see
+ * `lib/competitors/analyze.ts`) — never authored by the model — so they are
+ * grounded by construction and cannot drift from the real retrieved amounts.
+ * Every field is nullable because a set of records may all omit their amount.
+ */
+export const AwardStatsSchema = z.object({
+  /** How many records the stats were computed over. */
+  count: z.number().int().nonnegative(),
+  /** How many of those records actually disclosed an amount. */
+  withAmount: z.number().int().nonnegative(),
+  minAmount: z.number().nonnegative().nullable(),
+  medianAmount: z.number().nonnegative().nullable(),
+  maxAmount: z.number().nonnegative().nullable(),
+});
+export type AwardStats = z.infer<typeof AwardStatsSchema>;
+
+/**
+ * Honest-degradation metadata for a LIVE run (feasibility §6, §8 Risk 7): which
+ * sources responded, and any notes about a source that was unreachable or a
+ * capability (e.g. web search) that was unavailable. Surfaced in the UI so a
+ * partial run is labeled, never silently presented as complete.
+ */
+export const AnalysisDegradationSchema = z.object({
+  /** Sources that returned at least one usable record (e.g. "USAspending"). */
+  sources: z.array(z.string()),
+  /** Human-readable notes about anything skipped or degraded. */
+  notes: z.array(z.string()),
+});
+export type AnalysisDegradation = z.infer<typeof AnalysisDegradationSchema>;
+
+/**
  * A synthesized note on ONE kept competitor: how they positioned themselves to
  * win federal funding, grounded in a quote from THAT record's abstract.
  */
@@ -99,6 +164,13 @@ export const CompetitorSynthesisSchema = z.object({
   summary: z.string().optional(),
   competitors: z.array(CompetitorNoteSchema).min(1),
   recommendations: z.array(RecommendationSchema).min(1),
+  /**
+   * R5-deep — gaps / whitespace opportunities the founder could exploit. Same
+   * cited shape as a recommendation: every entry MUST cite at least one real
+   * record or web-profile id (enforced by the top-level refine). Optional so the
+   * original demo-first fixture (which predates this section) still validates.
+   */
+  opportunities: z.array(RecommendationSchema).optional(),
 });
 export type CompetitorSynthesis = z.infer<typeof CompetitorSynthesisSchema>;
 
@@ -121,48 +193,75 @@ export const CompetitorAnalysisSchema = z
     personaDescription: z.string().min(1),
     /** ISO-8601 timestamp the real data was retrieved / the analysis generated. */
     capturedAt: z.string().datetime(),
-    /** The REAL retrieved records — the only allowed evidence. */
+    /** The REAL retrieved records — the primary allowed evidence. */
     records: z.array(GroundedAwardRecordSchema).min(1),
+    /**
+     * R5-deep — private-company web profiles (no federal award). A secondary,
+     * clearly-labeled evidence set that recommendations/opportunities MAY cite
+     * but competitor cards (federal winners) may NOT. Optional.
+     */
+    webProfiles: z.array(WebCompetitorProfileSchema).optional(),
+    /** R5-deep — deterministic award-size stats over `records[]` (server-computed). */
+    awardStats: AwardStatsSchema.optional(),
     /** The grounded, cited synthesis over those records. */
     analysis: CompetitorSynthesisSchema,
+    /** R5-deep — "live" (personalized request-time run) vs "demo" (saved example). */
+    mode: z.enum(["live", "demo"]).optional(),
+    /** R5-deep — honest-degradation metadata for a partial/live run. */
+    degraded: AnalysisDegradationSchema.optional(),
     /** Optional metered capture cost (informational). */
     cost: CaptureCostSchema.optional(),
   })
   .superRefine((data, ctx) => {
-    const ids = new Set(data.records.map((r) => r.id));
+    // Award-record ids: the ONLY ids a competitor card (a federal winner) may cite.
+    const recordIds = new Set(data.records.map((r) => r.id));
+    // The union of award-record + web-profile ids is what any CITATION may reference.
+    const citableIds = new Set<string>(recordIds);
+    (data.webProfiles ?? []).forEach((p) => citableIds.add(p.id));
 
-    // Guard: duplicate record ids would make a citation ambiguous.
-    if (ids.size !== data.records.length) {
+    // Guard: ids must be unique ACROSS records AND web profiles, or a citation
+    // would be ambiguous about which evidence item it points at.
+    const totalIds = data.records.length + (data.webProfiles?.length ?? 0);
+    if (citableIds.size !== totalIds) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Record ids must be unique.",
+        message: "Record and web-profile ids must all be unique.",
         path: ["records"],
       });
     }
 
-    // Every competitor note must reference a REAL retrieved record.
+    // Every competitor note must reference a REAL retrieved AWARD record (not a
+    // web profile — competitor cards are federal winners, grounded in an award).
     data.analysis.competitors.forEach((c, i) => {
-      if (!ids.has(c.recordId)) {
+      if (!recordIds.has(c.recordId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Competitor references record id "${c.recordId}" that is not in the retrieved set — ungrounded claims cannot be rendered.`,
+          message: `Competitor references record id "${c.recordId}" that is not in the retrieved award set — ungrounded claims cannot be rendered.`,
           path: ["analysis", "competitors", i, "recordId"],
         });
       }
     });
 
-    // Every recommendation citation must reference a REAL retrieved record.
-    data.analysis.recommendations.forEach((rec, i) => {
-      rec.citations.forEach((cid, j) => {
-        if (!ids.has(cid)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Recommendation cites record id "${cid}" that is not in the retrieved set — ungrounded claims cannot be rendered.`,
-            path: ["analysis", "recommendations", i, "citations", j],
-          });
-        }
+    // Every recommendation/opportunity citation must reference a REAL retrieved
+    // award record OR a real web profile — nothing invented.
+    const checkCited = (
+      items: Array<{ citations: string[] }>,
+      key: "recommendations" | "opportunities",
+    ) => {
+      items.forEach((rec, i) => {
+        rec.citations.forEach((cid, j) => {
+          if (!citableIds.has(cid)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `${key === "recommendations" ? "Recommendation" : "Opportunity"} cites id "${cid}" that is not in the retrieved evidence set — ungrounded claims cannot be rendered.`,
+              path: ["analysis", key, i, "citations", j],
+            });
+          }
+        });
       });
-    });
+    };
+    checkCited(data.analysis.recommendations, "recommendations");
+    if (data.analysis.opportunities) checkCited(data.analysis.opportunities, "opportunities");
   });
 export type CompetitorAnalysis = z.infer<typeof CompetitorAnalysisSchema>;
 
