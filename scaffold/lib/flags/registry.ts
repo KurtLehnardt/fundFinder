@@ -39,7 +39,8 @@ export type FlagName =
   | "left_sidebar"
   | "g6_s2s_submission"
   | "b2_enriched_ranking"
-  | "c1b_type_groups";
+  | "c1b_type_groups"
+  | "d4_opportunity_graph";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -176,5 +177,13 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "Founder-facing opportunity-type filters plus grouping of the results map by instrument kind " +
       "(grants / R&D / procurement / loans / assistance / scholarships), replacing the flat list.",
     envVar: "NEXT_PUBLIC_FLAG_C1B_TYPE_GROUPS",
+  },
+  d4_opportunity_graph: {
+    name: "d4_opportunity_graph",
+    requirement: "D4",
+    description:
+      "Compact Startup -> Technology -> Agency -> Program -> Award node-link graph on the " +
+      "opportunity map, rendered from the existing map/matches/agencyIntelligence data.",
+    envVar: "NEXT_PUBLIC_FLAG_D4_OPPORTUNITY_GRAPH",
   },
 };
