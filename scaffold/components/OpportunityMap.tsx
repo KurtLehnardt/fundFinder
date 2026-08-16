@@ -6,6 +6,7 @@ import SimilarCompanies from "./SimilarCompanies";
 import AgencyMap from "./AgencyMap";
 import OpportunityGroups from "./OpportunityGroups";
 import OpportunityGraph from "./OpportunityGraph";
+import FundingStrategy from "./FundingStrategy";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
@@ -233,6 +234,11 @@ export default function OpportunityMap({ map }: { map: MapT }) {
             the EXISTING agencyIntelligence + matches already computed by
             buildOpportunityMap (lib/match.ts). See components/AgencyMap.tsx. */}
         <AgencyMap agencyIntelligence={agencyIntelligence} matches={matches} />
+
+        {/* D3 — "Your 12-month funding strategy": presentation-only, derived from
+            the EXISTING map by the pure lib/strategy/fundingStrategy.ts. Gated
+            behind the default-off d3_funding_strategy flag. */}
+        {isFlagEnabled("d3_funding_strategy") && <FundingStrategy map={map} />}
 
         {/* D1 — free aggregate panel, NEVER Max-gated (no useBilling / useEntitlements
             read here or in SimilarCompanies). Honestly labeled: a rollup of verified
