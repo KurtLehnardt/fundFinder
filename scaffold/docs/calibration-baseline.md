@@ -10,6 +10,18 @@
 | candidateCount | **24** | 12 |
 | scoreFloor | **30** | 45 |
 | weakFieldThreshold | **1** | 2 |
+| perTypeQuota | **3** | (new — C1a) |
+
+**C1a — per-type retrieval quota (`perTypeQuota: 3`):** retrieval was a single
+global top-`candidateCount` cosine cut, so the ~476 grants crowded out the ~492
+non-grant opps (rd/SBIR, procurement, assistance, loan, scholarship) and those
+instrument types never reached the LLM scorer (cases 1/2/4 never saw
+SBIR/procurement/assistance). The quota keeps the global top-N unchanged and
+ADDITIONALLY reserves the top-3-by-cosine of EACH `kind` present among the
+floor-clearing candidates, unioning them into the scored slice (deduped by id).
+This only makes underrepresented types **reachable** — it does not change
+`scoreFloor` (that recalibration is Wave-3 E1) and never displaces a strong
+grant. Fully deterministic (stable cosine-desc sort, tie-broken by opp id).
 
 **Why the retune (audit trail — this section is the reconciliation the arch
 review asked for):** the baseline below diagnosed cases 1 (AI-healthcare) and 4

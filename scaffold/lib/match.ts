@@ -34,6 +34,15 @@ export const CALIBRATION = {
    *  "no honest match" finding from thin-but-real cases (e.g. case 1's single
    *  strong NIH match), which case-5's large score margin keeps robust. */
   weakFieldThreshold: 1,
+  /** C1a — per-type retrieval quota. Reserve at least this many candidates of
+   *  EACH `kind` present among the floor-clearing set, so every instrument type
+   *  (rd/SBIR, procurement, assistance, loan, scholarship) REACHES the LLM
+   *  scorer instead of being crowded out by the 476 grants in a single global
+   *  top-`candidateCount` cosine cut. These slots are ADDED to (unioned with)
+   *  the global top-N — they never displace a strong grant. Purely deterministic
+   *  (top-K-by-cosine per kind, tie-broken by opp id). Does NOT change scoring;
+   *  it only makes underrepresented types reachable (scoreFloor stays Wave-3). */
+  perTypeQuota: 3,
 };
 
 /**
@@ -217,11 +226,41 @@ export async function buildOpportunityMap(
 
   // 4. Hybrid retrieval: similarity, then LLM scoring. No pre-screen eligibility
   //    filter — every retrieved candidate is screened by screen() (C1).
-  const scored = d.corpus
+  //
+  // C1a (per-type retrieval quota): a single global top-`candidateCount` cosine
+  // cut let the ~476 grants crowd out the ~492 non-grant opps (rd/SBIR,
+  // procurement, assistance, loan, scholarship), so those instrument types
+  // never reached the LLM scorer. We keep the global top-N unchanged (every
+  // strong grant that already made the cut is preserved) and ADDITIONALLY
+  // reserve the top `perTypeQuota` candidates of EACH `kind` present among the
+  // floor-clearing set, unioning them in (deduped by id). This makes every
+  // present instrument type REACHABLE by the scorer without displacing any
+  // strong grant. Fully deterministic: stable sort by cosine desc, tie-broken
+  // by opp id, so the union order is stable across runs.
+  const floorCleared = d.corpus
     .map((o) => ({ o, sim: o.embedding ? cosine(queryVec, o.embedding) : 0 }))
     .filter((x) => x.sim >= CALIBRATION.candidateFloor)
-    .sort((a, b) => b.sim - a.sim)
-    .slice(0, CALIBRATION.candidateCount);
+    .sort((a, b) => (b.sim - a.sim) || (a.o.id < b.o.id ? -1 : a.o.id > b.o.id ? 1 : 0));
+
+  // Base set: the UNCHANGED global top-N (preserves every strong grant that
+  // already qualified — nothing is discarded to make room for the quota).
+  const selectedIds = new Set(floorCleared.slice(0, CALIBRATION.candidateCount).map((x) => x.o.id));
+
+  // Reserved slots: top-`perTypeQuota`-by-cosine of EACH present kind, added if
+  // not already selected. Because `floorCleared` is pre-sorted, taking the first
+  // `perTypeQuota` occurrences per kind yields that kind's highest-cosine picks.
+  const perKindTaken = new Map<string, number>();
+  for (const x of floorCleared) {
+    const taken = perKindTaken.get(x.o.kind) ?? 0;
+    if (taken < CALIBRATION.perTypeQuota) {
+      perKindTaken.set(x.o.kind, taken + 1);
+      selectedIds.add(x.o.id);
+    }
+  }
+
+  // The candidate slice sent to the scorer: the union, in the same deterministic
+  // cosine-desc / id order as `floorCleared` (filter preserves array order).
+  const scored = floorCleared.filter((x) => selectedIds.has(x.o.id));
   step({ key: "retrieve", label: `Found ${scored.length} candidate programs`, pct: 46 });
 
   if (scored.length === 0) {
