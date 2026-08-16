@@ -3,7 +3,7 @@ import { embed, cosine } from "../embed";
 import { loadPrompt } from "../prompts";
 import type { CostMeter } from "../metering/meter";
 import { retrieveAwards, type RawAwardRecord } from "./retrieve";
-import { searchWebCompetitors } from "./web";
+import { searchWebCompetitors, type RawWebProfile } from "./web";
 import {
   CompetitorAnalysisSchema,
   type CompetitorAnalysis,
@@ -50,6 +50,15 @@ export interface AnalyzeInput {
   perKeyword?: number;
   meter?: CostMeter;
   signal?: AbortSignal;
+  /**
+   * Capture-supplied web profiles (e.g. gathered via the exa MCP by the demo
+   * capture). When provided, the live exa HTTP fetch is skipped and these are
+   * used verbatim — so a fixture can showcase real private competitors even
+   * without EXA_API_KEY at capture time.
+   */
+  webProfilesOverride?: RawWebProfile[];
+  /** "live" (request-time run, default) or "demo" (a saved fixture capture). */
+  mode?: "live" | "demo";
 }
 
 /** Thrown when a live run could not assemble enough grounded evidence. */
@@ -125,6 +134,44 @@ type RawSynthesis = {
   recommendations?: Array<{ advice?: string; citations?: string[] }>;
   opportunities?: Array<{ advice?: string; citations?: string[] }>;
 };
+
+/**
+ * Defense-in-depth grounding filter (PURE + unit-testable): drop any competitor,
+ * recommendation, or opportunity the model invented, BEFORE the schema parse — so
+ * a stray hallucinated id degrades to fewer honest claims rather than failing the
+ * whole run, and only grounded claims survive. Competitor cards may reference ONLY
+ * award-record ids (federal winners); recommendations/opportunities may cite award
+ * OR web-profile ids. Recommendations/opportunities left with no valid citation are
+ * dropped entirely (every claim must trace to real evidence).
+ */
+export function groundSynthesis(args: {
+  records: { id: string }[];
+  webProfiles: { id: string }[];
+  synthesis: RawSynthesis;
+}): {
+  competitors: { recordId: string; positioning: string; quotedSnippet: string }[];
+  recommendations: { advice: string; citations: string[] }[];
+  opportunities: { advice: string; citations: string[] }[];
+} {
+  const recordIds = new Set(args.records.map((r) => r.id));
+  const citableIds = new Set<string>(recordIds);
+  args.webProfiles.forEach((p) => citableIds.add(p.id));
+
+  const competitors = (args.synthesis.competitors ?? [])
+    .filter((c) => !!c.recordId && recordIds.has(c.recordId) && !!c.positioning && !!c.quotedSnippet)
+    .map((c) => ({ recordId: c.recordId!, positioning: c.positioning!, quotedSnippet: c.quotedSnippet! }));
+
+  const cleanCited = (items: RawSynthesis["recommendations"]) =>
+    (items ?? [])
+      .map((r) => ({ advice: r.advice ?? "", citations: (r.citations ?? []).filter((id) => citableIds.has(id)) }))
+      .filter((r) => r.advice.length > 0 && r.citations.length > 0);
+
+  return {
+    competitors,
+    recommendations: cleanCited(args.synthesis.recommendations),
+    opportunities: cleanCited(args.synthesis.opportunities),
+  };
+}
 
 async function synthesize(
   input: AnalyzeInput,
@@ -235,13 +282,21 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
 
   const records = assignIds(withSim.slice(0, keepTopK));
 
-  // [3] WEB — optional private comparables (skipped without EXA_API_KEY).
-  const webQuery =
-    input.webQuery ||
-    `category:company startups and companies comparable to ${input.persona}: ${input.personaDescription.slice(0, 240)}`;
-  const web = await searchWebCompetitors({ query: webQuery, numResults: 5, signal: input.signal });
-  notes.push(...web.notes);
-  const webProfiles: WebCompetitorProfile[] = web.profiles.map((p, i) => ({
+  // [3] WEB — optional private comparables. Use capture-supplied profiles when
+  // given (skips the exa HTTP call); otherwise search live (skipped w/o key).
+  let rawWeb: RawWebProfile[];
+  if (input.webProfilesOverride && input.webProfilesOverride.length) {
+    rawWeb = input.webProfilesOverride;
+    notes.push(`Included ${rawWeb.length} supplied web competitor profile(s).`);
+  } else {
+    const webQuery =
+      input.webQuery ||
+      `category:company startups and companies comparable to ${input.persona}: ${input.personaDescription.slice(0, 240)}`;
+    const web = await searchWebCompetitors({ query: webQuery, numResults: 5, signal: input.signal });
+    notes.push(...web.notes);
+    rawWeb = web.profiles;
+  }
+  const webProfiles: WebCompetitorProfile[] = rawWeb.map((p, i) => ({
     id: `web_${i + 1}`,
     company: p.company,
     sourceUrl: p.sourceUrl,
@@ -253,21 +308,7 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
   const synthesis = await synthesize(input, records, webProfiles);
 
   // [5] GROUND — drop any id the model invented (defense-in-depth before parse).
-  const recordIds = new Set(records.map((r) => r.id));
-  const citableIds = new Set<string>(recordIds);
-  webProfiles.forEach((p) => citableIds.add(p.id));
-
-  const competitors = (synthesis.competitors ?? [])
-    .filter((c) => c.recordId && recordIds.has(c.recordId) && c.positioning && c.quotedSnippet)
-    .map((c) => ({ recordId: c.recordId!, positioning: c.positioning!, quotedSnippet: c.quotedSnippet! }));
-
-  const cleanCited = (items: RawSynthesis["recommendations"]) =>
-    (items ?? [])
-      .map((r) => ({ advice: r.advice ?? "", citations: (r.citations ?? []).filter((id) => citableIds.has(id)) }))
-      .filter((r) => r.advice && r.citations.length > 0);
-
-  const recommendations = cleanCited(synthesis.recommendations);
-  const opportunities = cleanCited(synthesis.opportunities);
+  const { competitors, recommendations, opportunities } = groundSynthesis({ records, webProfiles, synthesis });
 
   if (competitors.length === 0 || recommendations.length === 0) {
     throw new InsufficientEvidenceError("Synthesis produced no grounded competitors/recommendations.");
@@ -286,7 +327,7 @@ export async function analyzeCompetitors(input: AnalyzeInput): Promise<Competito
       recommendations,
       ...(opportunities.length ? { opportunities } : {}),
     },
-    mode: "live",
+    mode: input.mode ?? "live",
     degraded: { sources: retrieval.sources, notes },
   };
 
