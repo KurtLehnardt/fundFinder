@@ -4,6 +4,7 @@ import OpportunityCard from "./OpportunityCard";
 import EligibilityBuckets, { type EligibilityItem } from "./EligibilityBuckets";
 import SimilarCompanies from "./SimilarCompanies";
 import AgencyMap from "./AgencyMap";
+import OpportunityGroups from "./OpportunityGroups";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
@@ -230,15 +231,22 @@ export default function OpportunityMap({ map }: { map: MapT }) {
             <p className={eyebrowClass(design, "mb-4")}>
               {w ? "Adjacent and partial matches" : "Your opportunity map"}
             </p>
-            <div className="space-y-3">
-              {shown.map((m, i) => (
-                // G5: thread the founder's extracted v1 profile down so the
-                // assisted-apply "Draft my application" flow can assemble a
-                // grounded package from real data (bridged to a §3.1
-                // CompanyProfile inside OpportunityCard). Absent → honest gaps.
-                <OpportunityCard key={m.opportunity?.id ?? i} m={m} index={i} startupProfile={map.profile} />
-              ))}
-            </div>
+            {/* C1b — founder-facing type filters + grouping by kind, flag-gated
+                (default off). All logic lives in OpportunityGroups + lib/
+                opportunities/group.ts; the flat list stays the baseline. */}
+            {isFlagEnabled("c1b_type_groups") ? (
+              <OpportunityGroups matches={shown} startupProfile={map.profile} />
+            ) : (
+              <div className="space-y-3">
+                {shown.map((m, i) => (
+                  // G5: thread the founder's extracted v1 profile down so the
+                  // assisted-apply "Draft my application" flow can assemble a
+                  // grounded package from real data (bridged to a §3.1
+                  // CompanyProfile inside OpportunityCard). Absent → honest gaps.
+                  <OpportunityCard key={m.opportunity?.id ?? i} m={m} index={i} startupProfile={map.profile} />
+                ))}
+              </div>
+            )}
           </section>
         )}
 

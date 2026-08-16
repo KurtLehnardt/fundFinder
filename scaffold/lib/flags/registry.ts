@@ -37,7 +37,9 @@ export type FlagName =
   | "r10_analytics"
   | "r4b_cost_debug"
   | "left_sidebar"
-  | "g6_s2s_submission";
+  | "g6_s2s_submission"
+  | "b2_enriched_ranking"
+  | "c1b_type_groups";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -156,5 +158,23 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "S2S submission integration (package -> grants.gov XML -> MOCK transport). Demo/preview " +
       "only; never submits to any federal system, gates nothing server-side, handles no credentials.",
     envVar: "NEXT_PUBLIC_FLAG_G6_S2S_SUBMISSION",
+  },
+  b2_enriched_ranking: {
+    name: "b2_enriched_ranking",
+    requirement: "B2",
+    description:
+      "Profile-enriched retrieval: fold the structured StartupProfile fields (employee size, " +
+      "funding stage, use-of-funds mechanism, industry/NAICS) into the query-embedding text and a " +
+      "deterministic, non-negative re-rank boost. Never admits a below-floor opp; scoring/tiers " +
+      "unchanged, so the honest-no is untouched.",
+    envVar: "NEXT_PUBLIC_FLAG_B2_ENRICHED_RANKING",
+  },
+  c1b_type_groups: {
+    name: "c1b_type_groups",
+    requirement: "C1b",
+    description:
+      "Founder-facing opportunity-type filters plus grouping of the results map by instrument kind " +
+      "(grants / R&D / procurement / loans / assistance / scholarships), replacing the flat list.",
+    envVar: "NEXT_PUBLIC_FLAG_C1B_TYPE_GROUPS",
   },
 };
