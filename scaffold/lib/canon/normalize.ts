@@ -91,13 +91,23 @@ export function parseDetailDateStr(s: string | null | undefined): string | undef
 // Status (R8.3)
 // ---------------------------------------------------------------------------
 
-/** grants.gov oppStatus values (search2 `oppStatusOptions`): forecasted | posted | closed | archived. */
+/**
+ * grants.gov oppStatus values (search2 `oppStatusOptions`): forecasted | posted
+ * | closed | archived. Evergreen programs (rolling/continuous/standing) have no
+ * deadline model (R8.3 — first-class statuses, per OpportunityStatusSchema); if
+ * a source surfaces one of those values here it is passed through as-is rather
+ * than collapsed to `unknown`. Anything unrecognized stays `unknown`.
+ */
 export function deriveStatus(oppStatus: string | null | undefined): CanonOpportunity["status"] {
   switch ((oppStatus ?? "").toLowerCase()) {
     case "forecasted": return "forecasted";
     case "posted": return "open";
     case "closed": return "closed";
     case "archived": return "closed"; // no longer accepting applications
+    // Evergreen (deadline-less) statuses — first-class, not forced to "unknown".
+    case "rolling": return "rolling";
+    case "continuous": return "continuous";
+    case "standing": return "standing";
     default: return "unknown";
   }
 }
