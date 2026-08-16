@@ -3,6 +3,7 @@ import { Component, type ReactNode } from "react";
 import OpportunityCard from "./OpportunityCard";
 import EligibilityBuckets, { type EligibilityItem } from "./EligibilityBuckets";
 import SimilarCompanies from "./SimilarCompanies";
+import AgencyMap from "./AgencyMap";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
@@ -167,13 +168,7 @@ export default function OpportunityMap({ map }: { map: MapT }) {
     ? "mt-10 border-t border-structure-on-canvas pt-7"
     : "mt-10 border-t border-rule pt-7";
 
-  const agencyCountClass = design ? "font-mono text-[11px] text-foreground" : "font-mono text-[11px] text-slate-550";
-
-  const agencyWhyClass = design
-    ? "mt-1.5 text-pretty font-body text-[13px] leading-relaxed text-foreground"
-    : "mt-1.5 font-body text-[13px] leading-relaxed text-slate-550";
-
-  // D1 — same section rhythm as "Agencies that matter most to you" above it.
+  // D1 — same section rhythm as "Agencies most relevant to you" above it.
   const similarCompaniesCaptionClass = design
     ? "mt-1.5 max-w-2xl text-pretty font-body text-[13px] leading-relaxed text-foreground"
     : "mt-1.5 max-w-2xl font-body text-[13px] leading-relaxed text-slate-550";
@@ -252,22 +247,10 @@ export default function OpportunityMap({ map }: { map: MapT }) {
           </section>
         )}
 
-        {agencyIntelligence.length > 0 && (
-          <section className={agenciesSectionClass}>
-            <p className={eyebrowClass(design, "mb-4")}>Agencies that matter most to you</p>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {agencyIntelligence.map((a) => (
-                <div key={a.agency}>
-                  <p className="text-balance font-display text-[15px] font-medium">{a.agency}</p>
-                  <p className={`${agencyCountClass} tabular-nums`}>
-                    {a.opportunityCount} {a.opportunityCount === 1 ? "opportunity" : "opportunities"}
-                  </p>
-                  <p className={agencyWhyClass}>{a.why}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* D2 — "Agencies most relevant to you": presentation-layer only, reads
+            the EXISTING agencyIntelligence + matches already computed by
+            buildOpportunityMap (lib/match.ts). See components/AgencyMap.tsx. */}
+        <AgencyMap agencyIntelligence={agencyIntelligence} matches={matches} />
 
         {/* D1 — free aggregate panel, NEVER Max-gated (no useBilling / useEntitlements
             read here or in SimilarCompanies). Honestly labeled: a rollup of verified
