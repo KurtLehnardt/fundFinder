@@ -9,6 +9,12 @@ import awards from "@/data/awards.json";
 import { createCostMeter, type CostMeter } from "./metering/meter";
 import { CURRENT_OPPORTUNITY_MAP_VERSION } from "./contracts/opportunityMap";
 import { isFlagEnabled } from "./flags";
+// F3 — weak-field redirects should name a few REAL Utah/SBA programs, not just
+// categories. Wrapped around both explainWeakField() call sites below (the
+// zero-candidate weakField() branch and the below-threshold branch in
+// buildOpportunityMap); see lib/redirects/utahSbaPrograms.ts for the curated
+// list and the (pure, hermetic) guarantee it makes.
+import { ensureRealRedirects } from "./redirects/utahSbaPrograms";
 
 /**
  * CALIBRATION KNOBS — tune these against all five test cases before touching UI.
@@ -356,7 +362,8 @@ export async function buildOpportunityMap(
   let weak: Awaited<ReturnType<typeof d.explainWeakField>> | undefined;
   if (strong.length < CALIBRATION.weakFieldThreshold) {
     try {
-      weak = await d.explainWeakField(profile, meter, signal);
+      // F3 — back the model's redirects with a few real named Utah/SBA programs.
+      weak = ensureRealRedirects(await d.explainWeakField(profile, meter, signal));
     } catch {
       weak = undefined;
     }
@@ -407,7 +414,8 @@ async function weakField(
     followUps,
     summary: { highPotential: 0, fundingIdentified: 0, agencies: 0, closingIn90Days: 0 },
     matches: [],
-    weakFieldFinding: await explainWeak(profile, meter, signal),
+    // F3 — back the model's redirects with a few real named Utah/SBA programs.
+    weakFieldFinding: ensureRealRedirects(await explainWeak(profile, meter, signal)),
     agencyIntelligence: [],
   };
   finalizeCost(meter, result);
