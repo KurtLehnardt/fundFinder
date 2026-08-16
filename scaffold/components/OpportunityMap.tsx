@@ -9,9 +9,7 @@ import OpportunityGraph from "./OpportunityGraph";
 import type { OpportunityMap as MapT, Match } from "@/lib/types";
 import { isFlagEnabled } from "@/lib/flags";
 import { aggregateSimilarCompanies } from "@/lib/similar/aggregate";
-
-const money = (n: number) =>
-  n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M+` : `$${Math.round(n / 1e3)}K+`;
+import { fundingCell, closingSoonCount } from "@/lib/ui/opportunitySummary";
 
 /** Cards to render. We never wall the founder with the 20+ "none" rows. */
 const CARD_CAP = 8;
@@ -42,38 +40,6 @@ class Boundary extends Component<{ children: ReactNode; design: boolean }, { fai
     }
     return this.props.children;
   }
-}
-
-function withinNinetyDays(deadline?: string): boolean {
-  if (!deadline) return false;
-  const t = Date.parse(deadline);
-  if (Number.isNaN(t)) return false;
-  const now = Date.now();
-  return t >= now && t <= now + 90 * 864e5;
-}
-
-/**
- * Recompute the header funding figure from what we actually render. The raw
- * summary.fundingIdentified is 0 on every case because strong matches lack
- * opportunity.fundingHigh — so we fall back to fundingLow, then to the median
- * historical award, and finally to total awarded to similar companies.
- */
-function fundingCell(shown: Match[]): { n: string; label: string } | null {
-  const strong = shown.filter((m) => m.tier === "likely" || m.tier === "verify");
-
-  // Prefer the programs' own stated funding ranges — that's real "potential funding".
-  const stated = strong.reduce((acc, m) => acc + (m.opportunity.fundingHigh ?? m.opportunity.fundingLow ?? 0), 0);
-  if (stated > 0) return { n: money(stated), label: "potential funding identified" };
-
-  // Otherwise fall back to what similar companies actually received — and label
-  // it honestly as such, not as this founder's potential funding.
-  const median = strong.reduce((acc, m) => acc + (m.history?.medianAward ?? 0), 0);
-  if (median > 0) return { n: money(median), label: "median award to similar companies" };
-
-  const awarded = shown.reduce((acc, m) => acc + (m.history?.totalAwarded ?? 0), 0);
-  if (awarded > 0) return { n: money(awarded), label: "awarded to similar companies" };
-
-  return null; // Never show "$0+".
 }
 
 export default function OpportunityMap({ map }: { map: MapT }) {
@@ -108,7 +74,10 @@ export default function OpportunityMap({ map }: { map: MapT }) {
 
   // Header stats derived from what we render — keeps them honest and consistent.
   const highPotential = shown.filter((m) => m.tier === "likely" || m.tier === "verify").length;
-  const closingSoon = shown.filter((m) => withinNinetyDays(m.opportunity?.deadline)).length;
+  // Evergreen-safe (F1): a rolling/continuous/standing program is never
+  // counted here, even if a stray deadline-shaped value is present on the
+  // record — see closingSoonCount/isClosingSoon in lib/ui/opportunitySummary.
+  const closingSoon = closingSoonCount(shown);
   const funding = fundingCell(shown);
 
   // R8 / ELG-04: map the REAL determinations attached by buildOpportunityMap
@@ -140,8 +109,8 @@ export default function OpportunityMap({ map }: { map: MapT }) {
   // fill (white content on top), same pairing as the header/nav per R7.2.
   // Polish: rounded + elevation instead of a same-color border.
   const weakFieldClass = design
-    ? "mt-8 rounded-lg bg-structure px-7 py-7 text-token-white shadow-card"
-    : "mt-8 border border-ink bg-ink px-7 py-7 text-paper";
+    ? "mt-8 rounded-lg bg-structure px-5 py-6 text-token-white shadow-card sm:px-7 sm:py-7"
+    : "mt-8 border border-ink bg-ink px-5 py-6 text-paper sm:px-7 sm:py-7";
 
   const weakFieldBodyClass = design
     ? "mt-3 max-w-2xl text-pretty font-body text-[15px] leading-relaxed text-token-white"
@@ -159,8 +128,8 @@ export default function OpportunityMap({ map }: { map: MapT }) {
     : "mt-1 font-body text-[13px] leading-relaxed text-paper/70";
 
   const followUpsSectionClass = design
-    ? "mt-8 rounded-lg bg-canvas-alt px-6 py-5 shadow-card"
-    : "mt-8 border border-rule bg-white px-6 py-5";
+    ? "mt-8 rounded-lg bg-canvas-alt px-4 py-5 shadow-card sm:px-6"
+    : "mt-8 border border-rule bg-white px-4 py-5 sm:px-6";
 
   const followUpItemClass = design
     ? "text-pretty font-body text-[14px] text-foreground"
@@ -197,7 +166,7 @@ export default function OpportunityMap({ map }: { map: MapT }) {
         {w && (
           <section className={weakFieldClass}>
             <p className={eyebrowClass(design)}>A finding, not a dead end</p>
-            <h2 className="mt-3 text-balance font-display text-[24px] font-medium leading-snug">{w.headline}</h2>
+            <h2 className="mt-3 text-balance font-display text-[20px] font-medium leading-snug sm:text-[24px]">{w.headline}</h2>
             <p className={weakFieldBodyClass}>{w.reasoning}</p>
 
             {w.redirects?.length > 0 && (
@@ -298,10 +267,15 @@ export default function OpportunityMap({ map }: { map: MapT }) {
 }
 
 function Cell({ design, n, label }: { design: boolean; n: string; label: string }) {
-  const cellClass = design ? "bg-canvas-alt px-5 py-6 text-foreground" : "bg-paper px-5 py-6";
+  // Mobile pass (N4): tighter padding + a smaller number size at phone
+  // widths so a 2-up stat grid (grid-cols-2 below sm) doesn't crowd or wrap
+  // longer figures like "$1.2M+ potential funding identified".
+  const cellClass = design
+    ? "bg-canvas-alt px-3 py-4 text-foreground sm:px-5 sm:py-6"
+    : "bg-paper px-3 py-4 sm:px-5 sm:py-6";
   return (
     <div className={cellClass}>
-      <div className="font-display text-[30px] font-bold leading-none tabular-nums">{n}</div>
+      <div className="font-display text-[22px] font-bold leading-none tabular-nums sm:text-[30px]">{n}</div>
       <div className={eyebrowClass(design, "mt-2 leading-snug")}>{label}</div>
     </div>
   );
