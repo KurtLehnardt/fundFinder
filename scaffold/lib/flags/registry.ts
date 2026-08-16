@@ -35,7 +35,8 @@ export type FlagName =
   | "r9_supabase_auth"
   | "r10_analytics"
   | "r4b_cost_debug"
-  | "left_sidebar";
+  | "left_sidebar"
+  | "g6_s2s_submission";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -137,5 +138,13 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "Left slide-out drawer (settings/grants/descriptions/account/mock-billing) replacing the " +
       "hamburger dropdown. Local-only; gates nothing server-side; billing is a labeled mock.",
     envVar: "NEXT_PUBLIC_FLAG_LEFT_SIDEBAR",
+  },
+  g6_s2s_submission: {
+    name: "g6_s2s_submission",
+    requirement: "G6",
+    description:
+      "S2S submission integration (package -> grants.gov XML -> MOCK transport). Demo/preview " +
+      "only; never submits to any federal system, gates nothing server-side, handles no credentials.",
+    envVar: "NEXT_PUBLIC_FLAG_G6_S2S_SUBMISSION",
   },
 };
