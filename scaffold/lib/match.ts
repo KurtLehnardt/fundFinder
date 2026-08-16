@@ -89,19 +89,67 @@ export function tierFromScore(score: number): Tier {
   return "none";
 }
 
-export function historyFor(oppId: string, state?: string): AwardHistory | undefined {
-  const rows = (awards as any)[oppId];
-  if (!rows || rows.length === 0) return undefined;
-  const amounts = rows.map((r: any) => r.amount).sort((a: number, b: number) => a - b);
+/**
+ * A3-lite (awards provenance gate) — the raw shape of a row in
+ * `data/awards.json`. `sourceUrl` is OPTIONAL here (this is the shape as it
+ * arrives from the data file / a test fixture), unlike the required
+ * `sourceUrl` in `AwardHistorySchema.recipients` (`lib/contracts/
+ * opportunityMap.ts`): a row without one is a candidate for filtering, not a
+ * schema violation, until it survives `filterVerifiedRows()` below.
+ */
+export type AwardRow = {
+  company: string;
+  program: string;
+  agency: string;
+  amount: number;
+  year: number;
+  state?: string;
+  sameVertical?: boolean;
+  sourceUrl?: string;
+};
+
+/**
+ * A3-lite — the ONLY gate between raw award rows and anything a user sees.
+ * Every `data/awards.json` row was cross-checked against the live SBIR.gov
+ * bulk award CSV (firm + agency + program + award year + amount) and only
+ * verified rows were written back with a real `sourceUrl`
+ * (`https://www.sbir.gov/awards?firm=<firm>`); unverifiable rows were DROPPED
+ * from the data file entirely. This filter is defense-in-depth on top of
+ * that: it re-asserts the same guarantee at render time so a row can never
+ * reach the UI without provenance, regardless of how it got into the awards
+ * map (a future data refresh, a bad merge, a test fixture, etc.).
+ */
+export function filterVerifiedRows(rows: AwardRow[]): AwardRow[] {
+  return rows.filter((r) => typeof r.sourceUrl === "string" && r.sourceUrl.length > 0);
+}
+
+/**
+ * A3-lite — pure, hermetic computation of an `AwardHistory` from an already-
+ * loaded row array (no `@/data/awards.json` import, no I/O). Filters to
+ * verified rows FIRST, so `similarCompanies`/totals/medians/`recipients` all
+ * reflect only rows with a real `sourceUrl`. Extracted out of `historyFor` so
+ * tests can inject a fixture row set (mix of verified + unverified) instead
+ * of depending on the real 4,020-row data file.
+ */
+export function historyFromRows(rows: AwardRow[], state?: string): AwardHistory | undefined {
+  const verified = filterVerifiedRows(rows);
+  if (verified.length === 0) return undefined;
+  const amounts = verified.map((r) => r.amount).sort((a, b) => a - b);
   const mid = Math.floor(amounts.length / 2);
   return {
-    similarCompanies: rows.length,
-    totalAwarded: amounts.reduce((a: number, b: number) => a + b, 0),
+    similarCompanies: verified.length,
+    totalAwarded: amounts.reduce((a, b) => a + b, 0),
     medianAward: amounts.length % 2 ? amounts[mid] : Math.round((amounts[mid - 1] + amounts[mid]) / 2),
-    inState: rows.filter((r: any) => (r.state ?? "").toLowerCase() === (state ?? "utah").toLowerCase()).length,
-    inVertical: rows.filter((r: any) => r.sameVertical).length,
-    recipients: rows.slice(0, 8),
+    inState: verified.filter((r) => (r.state ?? "").toLowerCase() === (state ?? "utah").toLowerCase()).length,
+    inVertical: verified.filter((r) => r.sameVertical).length,
+    recipients: verified.slice(0, 8) as AwardHistory["recipients"],
   };
+}
+
+export function historyFor(oppId: string, state?: string): AwardHistory | undefined {
+  const rows = (awards as any)[oppId] as AwardRow[] | undefined;
+  if (!rows || rows.length === 0) return undefined;
+  return historyFromRows(rows, state);
 }
 
 /** A real pipeline milestone, streamed to the client so the loading bar can
