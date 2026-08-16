@@ -29,6 +29,7 @@ export type FlagName =
   | "r3_enhance"
   | "r4_progress"
   | "r6_auto_apply"
+  | "r6_export_autofill"
   | "r7_design"
   | "r8_eligibility"
   | "r9_0_mockauth"
@@ -86,6 +87,15 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "Assisted-apply demo: sign-in → requirements → admin-review-pending walkthrough " +
       "(preview only; never submits an application, gates nothing server-side).",
     envVar: "NEXT_PUBLIC_FLAG_R6_AUTO_APPLY",
+  },
+  r6_export_autofill: {
+    name: "r6_export_autofill",
+    requirement: "R6",
+    description:
+      "\"Export for the browser autofill extension\" button on the package screen — client-side " +
+      "serialization of the already-assembled package into a signed .granted.json download for the " +
+      "Granted browser extension (T7). No server call, no server retention (§5.3).",
+    envVar: "NEXT_PUBLIC_FLAG_R6_EXPORT_AUTOFILL",
   },
   r7_design: {
     name: "r7_design",

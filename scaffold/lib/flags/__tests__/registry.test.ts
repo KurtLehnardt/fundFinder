@@ -38,6 +38,7 @@ describe("FLAG_REGISTRY", () => {
       "r3_enhance",
       "r4_progress",
       "r6_auto_apply",
+      "r6_export_autofill",
       "r7_design",
       "r8_eligibility",
       "r9_0_mockauth",
