@@ -53,6 +53,7 @@ describe("FLAG_REGISTRY", () => {
       "d3_funding_strategy",
       "d5_alerts",
       "r5_deep_analysis",
+      "e3_two_pass",
     ];
     assert.deepEqual(Object.keys(FLAG_REGISTRY).sort(), expected.slice().sort());
   });

@@ -1,5 +1,5 @@
 import { embed, cosine } from "./embed";
-import { extractProfile, explainMatches, explainWeakField } from "./claude";
+import { extractProfile, explainMatches, explainMatchesTwoPass, explainWeakField } from "./claude";
 import type { Opportunity, OpportunityMap, StartupProfile, Match, Tier, AwardHistory } from "./types";
 import { screen } from "./eligibility/screen";
 import { annotateFreshness } from "./eligibility/freshness";
@@ -95,6 +95,8 @@ export type BuildDeps = {
   extractProfile: typeof extractProfile;
   embed: typeof embed;
   explainMatches: typeof explainMatches;
+  /** E3 — the flag-`e3_two_pass`-ON scorer; same signature as `explainMatches`. */
+  explainMatchesTwoPass: typeof explainMatchesTwoPass;
   explainWeakField: typeof explainWeakField;
   screen: typeof screen;
   corpus: Opportunity[];
@@ -104,6 +106,7 @@ const REAL_DEPS: BuildDeps = {
   extractProfile,
   embed,
   explainMatches,
+  explainMatchesTwoPass,
   explainWeakField,
   screen,
   corpus: corpus as unknown as Opportunity[],
@@ -314,19 +317,22 @@ export async function buildOpportunityMap(
   }
 
   step({ key: "score", label: "Scoring and explaining your matches", pct: 52 });
-  const assessments = await d.explainMatches(
-    profile,
-    scored.map((s) => s.o),
-    meter,
-    // Per-batch progress: interpolate between the score milestone (52) and the
-    // assemble milestone (90) as batches settle, so the ~83s scoring stage no
-    // longer sits frozen at 52%.
-    (done, total) => {
-      const pct = total > 0 ? 52 + Math.round((done / total) * 36) : 52;
-      step({ key: "score-progress", label: `Scored ${done} of ${total} programs`, pct, detail: `${done}/${total}` });
-    },
-    signal,
-  );
+  // Per-batch progress: interpolate between the score milestone (52) and the
+  // assemble milestone (90) as batches settle, so the ~83s scoring stage no
+  // longer sits frozen at 52%.
+  const onScoreBatch = (done: number, total: number) => {
+    const pct = total > 0 ? 52 + Math.round((done / total) * 36) : 52;
+    step({ key: "score-progress", label: `Scored ${done} of ${total} programs`, pct, detail: `${done}/${total}` });
+  };
+  // E3 (flag `e3_two_pass`, default OFF): when ON, run the cheap-then-narrative
+  // two-pass scorer (Pass A scores all candidates on the cheap model; Pass B
+  // writes full narratives only for those clearing the render threshold). When
+  // OFF, the single-pass `explainMatches` runs exactly as before — identical
+  // args, byte-unchanged behavior. Both return the same `Assessment[]` shape, so
+  // everything below (tiering, eligibility, summary) is untouched.
+  const assessments = isFlagEnabled("e3_two_pass")
+    ? await d.explainMatchesTwoPass(profile, scored.map((s) => s.o), meter, onScoreBatch, signal)
+    : await d.explainMatches(profile, scored.map((s) => s.o), meter, onScoreBatch, signal);
   step({ key: "assemble", label: "Writing your opportunity map", pct: 90 });
   const byId = new Map(scored.map((s) => [s.o.id, s.o]));
 

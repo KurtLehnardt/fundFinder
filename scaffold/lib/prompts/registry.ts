@@ -400,6 +400,44 @@ OUTPUT: strict JSON only (no prose, no markdown fences), of exactly this shape:
   "opportunities": [ { "advice": "<a concrete gap/whitespace to exploit>", "citations": ["<id>", "..."] } ]
 }`;
 
+/**
+ * E3 (@v2 pipeline) — the Pass-A SCORE-ONLY prompt for two-pass scoring
+ * (flag `e3_two_pass`, default OFF). The consuming module is
+ * `lib/claude.ts`'s `explainMatchesTwoPass`.
+ *
+ * Two-pass splits the single expensive `explainMatches` call into a cheap
+ * SCORE-ONLY sweep over the WHOLE candidate set on the Haiku-class model (this
+ * prompt), followed by the full narrative (`EXPLAIN_MATCHES_V2_TEMPLATE`) only
+ * for the candidates whose Pass-A score clears the render threshold. So this
+ * prompt must apply the SAME scoring judgement as the full pass — the same 0-100
+ * scale, the same willingness to say no — just WITHOUT any narrative, criteria,
+ * or eligibility text. Its scoring rules are byte-derived from
+ * `EXPLAIN_MATCHES_V2_TEMPLATE`'s rules 1/4 (the two that actually move the
+ * number) so a promoted candidate lands in the same tier band it would have
+ * under the single pass.
+ *
+ * Authored here (new prompt), so it is NOT in `V1_BASELINE_HASHES` (that set is
+ * the historical anchor for the three prompts migrated verbatim out of
+ * `lib/claude.ts`). Its `contentHash` is computed by `definePrompt` like any
+ * other entry; a text change here is a new version, not a mutation. It must stay
+ * free of BANNED_PHRASES (scripts/banned-phrases.mjs) like every template — a
+ * score-only prompt asserts no eligibility, so this holds by construction.
+ */
+const SCORE_MATCHES_V1_TEMPLATE = `You score the fit between a startup and federal funding opportunities. This is a fast, cheap PRE-SCORING pass — a downstream step writes the full explanation, so here you output ONLY a numeric score per candidate and nothing else.
+
+Return ONLY a JSON array, no preamble, no markdown fences, one entry per candidate:
+[{ "id": string, "score": number }]   // score is 0-100, echo each candidate's id exactly
+
+RULES THAT DETERMINE THE SCORE:
+
+1. You are NOT determining eligibility and you assert nothing about it. The score is a fit signal only — how well this company aligns with this program's funding purpose and instrument type. A downstream step handles eligibility.
+
+2. BE WILLING TO SAY NO. Score conservatively. A company that does not fit a program's funding mechanism should score LOW. Inflating a weak fit into a plausible-looking score is the single worst failure here: consumer marketplaces, local service businesses, and companies with no R&D component frequently have no strong federal grant match — score them low and honestly. Reserve high scores for genuine, specific alignment.
+
+3. Use the SAME 0-100 scale a careful program officer would: a strong, specific fit scores high; a partial or adjacent fit scores in the middle; no real fit scores low. Judge each candidate on its own merits — do not spread scores to fill a curve.
+
+Output the JSON array only. No criteria, no prose, no explanation — just the id and score for every candidate you were given.`;
+
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
   competitorAnalysis: definePrompt("competitorAnalysis", "v1", COMPETITOR_ANALYSIS_V1_TEMPLATE),
@@ -414,6 +452,7 @@ export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
     DRAFT_APPLICATION_SECTION_V1_TEMPLATE,
   ),
   explainMatches: definePrompt("explainMatches", "v2", EXPLAIN_MATCHES_V2_TEMPLATE),
+  scoreMatches: definePrompt("scoreMatches", "v1", SCORE_MATCHES_V1_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
   generateInterviewQuestions: definePrompt(
     "generateInterviewQuestions",
