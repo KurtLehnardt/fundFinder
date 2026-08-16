@@ -165,7 +165,7 @@ export async function buildOpportunityMap(
     (profile.expandedTerms ?? []).join(", "),
   ].filter(Boolean).join("\n");
   const queryVec = await d.embed(queryText, meter, signal);
-  step({ key: "embed", label: "Searching 476 programs", pct: 32 });
+  step({ key: "embed", label: `Searching ${d.corpus.length} programs`, pct: 32 });
 
   // 4. Hybrid retrieval: similarity, then LLM scoring. No pre-screen eligibility
   //    filter — every retrieved candidate is screened by screen() (C1).
