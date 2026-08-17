@@ -24,7 +24,7 @@ describe("criteriaMetRatio", () => {
 });
 
 describe("recommendFor — aggressive thresholds", () => {
-  test("strong grant (≥60 + ≥60% criteria) → recommend", () => {
+  test("strong grant (≥52 + ≥60% criteria) → recommend", () => {
     const r = recommendFor({ adjustedScore: 62, kind: "grant", criteria: crit(4, 5) });
     assert.equal(r.recommendation, "recommend");
     assert.match(r.label, /worth pursuing/i);
@@ -71,8 +71,8 @@ describe("per-type floors — non-grants held higher", () => {
     const r = recommendFor({ adjustedScore: 62, kind: "loan", criteria: crit(5, 5) });
     assert.equal(r.recommendation, "verify");
   });
-  test("grant @62 with the same strong criteria → recommend (grant floor 60)", () => {
-    assert.equal(RECOMMEND_FLOOR.grant, 60);
+  test("grant @62 with the same strong criteria → recommend (grant floor 52)", () => {
+    assert.equal(RECOMMEND_FLOOR.grant, 52);
     const r = recommendFor({ adjustedScore: 62, kind: "grant", criteria: crit(5, 5) });
     assert.equal(r.recommendation, "recommend");
   });

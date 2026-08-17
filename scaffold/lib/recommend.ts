@@ -34,8 +34,8 @@ export type { Recommendation, RecommendationResult, MapVerdict };
  * and never hide a match (an over-floor non-grant simply renders as `verify`).
  */
 export const RECOMMEND_FLOOR: Record<OpportunityKind, number> = {
-  grant: 60,
-  rd: 60,
+  grant: 52,
+  rd: 52,
   assistance: 62,
   procurement: 65,
   loan: 66,
