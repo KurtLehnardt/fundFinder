@@ -14,7 +14,7 @@ multi-agent system.*
 
 - GOED bounty · AI Builder Day · Aug 15, 2026
 - Live demo: **https://fund-finder-blush.vercel.app**
-- Repo: **https://github.com/KurtLehnardt/fundFinder**
+- Repo: **https://github.com/KurtLehnardt/granted**
 - Built by one orchestrator agent + specialized subagent teams — **21 merged PRs in ~8 hours**
 
 ---
@@ -28,7 +28,7 @@ multi-agent system.*
   user problem, not on finding uses for AI
 - Manage the triangle: **Intelligence / Cost / Latency**, with model routing
 - **Calibration is the product**: the win is saying *"probably not a fit"* and explaining why
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/northstar.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/northstar.md
 
 ---
 
@@ -42,7 +42,7 @@ multi-agent system.*
   award history
 - Three honest eligibility buckets — **eligible / conditionally eligible / excluded** — plus **unknown**
 - **Test case 5 (Youth Marketplace)** is the proof: it must decline, not fabricate
-- Link (5 judged cases): https://github.com/KurtLehnardt/fundFinder/blob/main/README.md
+- Link (5 judged cases): https://github.com/KurtLehnardt/granted/blob/main/README.md
 
 ---
 
@@ -56,7 +56,7 @@ multi-agent system.*
   before merge; a dispatcher **auto-merges PRs when clean**
 - **Model/effort routing:** small→haiku, medium→sonnet, large→opus; **all reviewers run opus**
 - Many slices ran **in parallel** — one branch = one subagent's isolated worktree
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/prompts/START-HERE.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/prompts/START-HERE.md
 
 ---
 
@@ -71,7 +71,7 @@ multi-agent system.*
   - "the pipeline is one big prompt" → **false** (already a composed chain)
   - real risk wasn't latency — it was **data staleness**
 - Re-scoped Canon + Perf slices instead of building non-problems
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/hypothesis-check.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/hypothesis-check.md
 
 ---
 
@@ -85,7 +85,7 @@ multi-agent system.*
 - **Contracts (zod) freeze first** and block everyone; feature-flag everything, default off
 - Critical path: `CON-01 → CAN-01 → CAN-04 → ELG-01 → INT-02/FE-03`
 - **Slices 1–3 shipped** in the window; slices 4–8 remain planned specs (honest scope)
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/task-graph.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/task-graph.md
 
 ---
 
@@ -111,7 +111,7 @@ multi-agent system.*
 - **Screen** → eligible / conditional / excluded / unknown; **score** → `claude-sonnet-4-6`,
   parallel-batched (`Promise.allSettled`, batches of 8)
 - Model-routing table sends cheap subtasks to cheap models; expensive analysis stays on the analysis model
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/as-built.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/as-built.md
 
 ---
 
@@ -155,7 +155,7 @@ multi-agent system.*
   *not* treated as a quality score
 - Manual audit found **1 genuine re-ask bug** (interview re-asked US-ownership after "70% foreign-owned")
 - Fixed one PR later by a **prompt v1→v2 bump** (PR #19) — the eval, read honestly, found it
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/README.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/README.md
 
 ---
 
@@ -170,7 +170,7 @@ multi-agent system.*
   server-side, stores no credentials**
 - Backed by a **research-only feasibility memo** (APL-01) gated on legal review — recommendation:
   **package-builder + human review-and-attest + human submits**
-- Link: https://github.com/KurtLehnardt/fundFinder/blob/main/docs/R6-s2s-feasibility-memo.md
+- Link: https://github.com/KurtLehnardt/granted/blob/main/docs/R6-s2s-feasibility-memo.md
 
 ---
 
@@ -223,9 +223,9 @@ multi-agent system.*
 - **476** opportunities embedded @512-dim · **946** cited eligibility rules · golden set **31** cases (v1.0)
 - Latency **~180s → ~98s** · **0 false exclusions** (24 checks + 160 determinations) · interview **4.1s** · **19/19** AA
 - **Live demo:** https://fund-finder-blush.vercel.app
-- **Repo:** https://github.com/KurtLehnardt/fundFinder
-- **Orchestration spec:** https://github.com/KurtLehnardt/fundFinder/blob/main/prompts/fundfinder-orchestrator-prompt.md
-- **Recon docs:** [as-built](https://github.com/KurtLehnardt/fundFinder/blob/main/as-built.md) ·
-  [hypothesis-check](https://github.com/KurtLehnardt/fundFinder/blob/main/hypothesis-check.md) ·
-  [canon](https://github.com/KurtLehnardt/fundFinder/blob/main/canon.md) ·
-  [task-graph](https://github.com/KurtLehnardt/fundFinder/blob/main/task-graph.md)
+- **Repo:** https://github.com/KurtLehnardt/granted
+- **Orchestration spec:** https://github.com/KurtLehnardt/granted/blob/main/prompts/fundfinder-orchestrator-prompt.md
+- **Recon docs:** [as-built](https://github.com/KurtLehnardt/granted/blob/main/as-built.md) ·
+  [hypothesis-check](https://github.com/KurtLehnardt/granted/blob/main/hypothesis-check.md) ·
+  [canon](https://github.com/KurtLehnardt/granted/blob/main/canon.md) ·
+  [task-graph](https://github.com/KurtLehnardt/granted/blob/main/task-graph.md)
