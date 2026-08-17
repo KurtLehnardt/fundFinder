@@ -1,22 +1,53 @@
 import type { CostMeter } from "./metering/meter";
 
 /**
- * Embeddings via OpenAI text-embedding-3-small.
- * Programs are embedded once at build time (scripts/3-embed.mjs); founder
- * queries are embedded here at runtime. Both must use the SAME model or the
- * vectors are not comparable.
+ * Embeddings. Default: OpenAI text-embedding-3-small @ 512 dims, which matches
+ * the committed corpus (programs are embedded once at build time via
+ * scripts/3-embed.mjs; founder queries are embedded here at runtime — both must
+ * use the SAME model or the vectors aren't comparable).
+ *
+ * The same env seam as lib/llm/client.ts lets you point at a LOCAL,
+ * OpenAI-compatible embedder (e.g. Ollama's `nomic-embed-text`) for a fully
+ * offline run — but then RE-EMBED the corpus with that model (`npm run
+ * data:embed`), since vectors are only comparable within one model.
+ *
+ * Env: EMBEDDINGS_BASE_URL / EMBEDDINGS_MODEL / EMBEDDINGS_DIMENSIONS /
+ *      EMBEDDINGS_API_KEY (falls back to OPENAI_API_KEY).
  */
-const MODEL = "text-embedding-3-small";
+const BASE_URL = (process.env.EMBEDDINGS_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+const MODEL = process.env.EMBEDDINGS_MODEL || "text-embedding-3-small";
+const IS_OPENAI = /api\.openai\.com/.test(BASE_URL);
+// OpenAI's text-embedding-3-* accept a `dimensions` param (512 matches the
+// corpus); local models have a fixed size, so we omit it there.
+const DIMENSIONS = process.env.EMBEDDINGS_DIMENSIONS
+  ? Number(process.env.EMBEDDINGS_DIMENSIONS)
+  : IS_OPENAI
+    ? 512
+    : undefined;
+
+function embeddingKey(): string {
+  const key = process.env.EMBEDDINGS_API_KEY || process.env.OPENAI_API_KEY;
+  if (!key && IS_OPENAI) {
+    throw new Error(
+      "OPENAI_API_KEY is not set. Add it to .env.local (or set EMBEDDINGS_BASE_URL to a local embedder).",
+    );
+  }
+  return key || "local"; // local endpoints (Ollama) ignore the bearer token
+}
+
+function embedBody(input: string | string[]): string {
+  return JSON.stringify(
+    DIMENSIONS != null ? { model: MODEL, dimensions: DIMENSIONS, input } : { model: MODEL, input },
+  );
+}
 
 export async function embed(text: string, meter?: CostMeter, signal?: AbortSignal): Promise<number[]> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
-
+  const key = embeddingKey();
   const t0 = performance.now();
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
+  const res = await fetch(`${BASE_URL}/embeddings`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: MODEL, dimensions: 512, input: text }),
+    body: embedBody(text),
     signal,
   });
 
@@ -56,8 +87,7 @@ export async function embedBatch(
   signal?: AbortSignal,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
+  const key = embeddingKey();
 
   const CHUNK = 128;
   const chunks: string[][] = [];
@@ -66,10 +96,10 @@ export async function embedBatch(
   const perChunk = await Promise.all(
     chunks.map(async (chunk) => {
       const t0 = performance.now();
-      const res = await fetch("https://api.openai.com/v1/embeddings", {
+      const res = await fetch(`${BASE_URL}/embeddings`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: MODEL, dimensions: 512, input: chunk }),
+        body: embedBody(chunk),
         signal,
       });
       if (!res.ok) throw new Error(`Batch embedding request failed (${res.status}): ${await res.text()}`);
