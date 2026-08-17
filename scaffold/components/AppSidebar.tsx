@@ -29,6 +29,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { useAuth } from "@/components/AuthProvider";
 import { useBilling } from "@/components/BillingProvider";
+import { isFlagEnabled } from "@/lib/flags";
 import { useSearchDraft } from "@/components/SearchDraftProvider";
 import { useDialogA11y } from "@/components/useDialogA11y";
 import { useMediaQuery } from "@/components/useMediaQuery";
@@ -846,7 +847,8 @@ function SidebarSections() {
         </div>
       </Section>
 
-      {/* 5 — Billing (MOCK) ----------------------------------------------- */}
+      {/* 5 — Billing (MOCK) — hidden unless commercial_ui is on ----------- */}
+      {isFlagEnabled("commercial_ui") && (
       <Section id="billing" label="Billing">
         <p className={noteClass}>
           Mock plans — selecting one is a local demo switch only. No payment is taken and no
@@ -882,6 +884,7 @@ function SidebarSections() {
         </ul>
         <p className={`mt-3 ${noteClass}`}>This is a mock. No real charge, ever.</p>
       </Section>
+      )}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { getAutoApplyRequirements } from "@/lib/mockAuth";
 import { useDialogA11y } from "@/components/useDialogA11y";
+import { isFlagEnabled } from "@/lib/flags";
 
 /**
  * FE-06 — Pro-upsell stub shown when someone clicks the locked "Auto Apply"
@@ -52,6 +53,7 @@ export default function AutoApplyModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useDialogA11y(dialogRef, onClose, closeBtnRef);
+  const commercial = isFlagEnabled("commercial_ui"); // hide "Pro plan" framing when off
 
   const reqs = getAutoApplyRequirements();
   const satisfied: Record<RequirementKey, boolean> = {
@@ -134,9 +136,9 @@ export default function AutoApplyModal({
 
         <p id="auto-apply-modal-desc" className={bodyClass}>
           Auto Apply would fill out and submit federal applications for you automatically. We're
-          still finishing the integrations with each grant site, so it isn't live yet — when it
-          ships, it will be part of a Pro plan we're building toward. Nothing is submitted
-          anywhere today.
+          still finishing the integrations with each grant site, so it isn't live yet.
+          {commercial ? " When it ships, it will be part of a Pro plan we're building toward." : ""} Nothing is
+          submitted anywhere today.
         </p>
 
         <p className={bodyClass}>
