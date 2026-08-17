@@ -302,11 +302,11 @@ high-leverage director of an agent fleet:
 ## 14. Links
 
 - **Live demo:** https://fund-finder-blush.vercel.app
-- **Repo:** https://github.com/KurtLehnardt/fundFinder
-- **Orchestration spec:** https://github.com/KurtLehnardt/fundFinder/blob/main/prompts/fundfinder-orchestrator-prompt.md
-- **Entry point:** https://github.com/KurtLehnardt/fundFinder/blob/main/prompts/START-HERE.md
-- **Recon — as-built:** https://github.com/KurtLehnardt/fundFinder/blob/main/as-built.md
-- **Recon — hypothesis check:** https://github.com/KurtLehnardt/fundFinder/blob/main/hypothesis-check.md
-- **Recon — canon (data sources):** https://github.com/KurtLehnardt/fundFinder/blob/main/canon.md
-- **Task graph:** https://github.com/KurtLehnardt/fundFinder/blob/main/task-graph.md
-- **R6 assisted-apply feasibility memo:** https://github.com/KurtLehnardt/fundFinder/blob/main/docs/R6-s2s-feasibility-memo.md
+- **Repo:** https://github.com/KurtLehnardt/granted
+- **Orchestration spec:** https://github.com/KurtLehnardt/granted/blob/main/prompts/fundfinder-orchestrator-prompt.md
+- **Entry point:** https://github.com/KurtLehnardt/granted/blob/main/prompts/START-HERE.md
+- **Recon — as-built:** https://github.com/KurtLehnardt/granted/blob/main/as-built.md
+- **Recon — hypothesis check:** https://github.com/KurtLehnardt/granted/blob/main/hypothesis-check.md
+- **Recon — canon (data sources):** https://github.com/KurtLehnardt/granted/blob/main/canon.md
+- **Task graph:** https://github.com/KurtLehnardt/granted/blob/main/task-graph.md
+- **R6 assisted-apply feasibility memo:** https://github.com/KurtLehnardt/granted/blob/main/docs/R6-s2s-feasibility-memo.md

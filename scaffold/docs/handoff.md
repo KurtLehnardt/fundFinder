@@ -29,7 +29,7 @@ gold-plate infrastructure.
 `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are both in `~/.zshrc` and in the Vercel project.
 If they're not visible, `source ~/.zshrc`. Never print key values.
 
-GitHub remote: https://github.com/KurtLehnardt/fundFinder
+GitHub remote: https://github.com/KurtLehnardt/granted
 Vercel project is already created and linked to those env vars.
 
 ## Task 1 — shrink the embeddings BEFORE running anything
