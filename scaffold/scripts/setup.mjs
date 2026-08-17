@@ -57,7 +57,24 @@ function upsert(text, key, value) {
 }
 
 // --- prompts (hidden for secrets) ---------------------------------------------
-function ask(query, { hidden = false } = {}) {
+// Two clean input paths. At a real TTY (the normal `npm run setup`), readline
+// prompts with masked entry for secrets. When stdin is PIPED (CI / scripted /
+// `printf ... | npm run setup`), readline's per-question terminal mode mis-reads
+// lines and leaves awaits unsettled — so we buffer stdin once and hand out one
+// line per prompt. Both always resolve.
+const IS_TTY = Boolean(process.stdin.isTTY);
+
+let _pipedLines = null;
+async function readPipedLine() {
+  if (_pipedLines === null) {
+    const chunks = [];
+    for await (const chunk of process.stdin) chunks.push(chunk);
+    _pipedLines = Buffer.concat(chunks).toString("utf8").split(/\r?\n/);
+  }
+  return _pipedLines.length ? _pipedLines.shift() : "";
+}
+
+function askTTY(query, hidden) {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
     if (hidden) {
@@ -71,6 +88,14 @@ function ask(query, { hidden = false } = {}) {
       resolve(answer.trim());
     });
   });
+}
+
+async function ask(query, { hidden = false } = {}) {
+  if (IS_TTY) return askTTY(query, hidden);
+  process.stdout.write(query);
+  const line = await readPipedLine();
+  process.stdout.write("\n");
+  return line.trim();
 }
 
 async function collectKey(text, key, label, { required, help }) {
@@ -156,3 +181,6 @@ console.log(`  • The honest "don't apply" layer → set ${c.g("NEXT_PUBLIC_FLA
 console.log(`  • Real Google sign-in           → a Supabase project + Google OAuth (README: "Real sign-in")`);
 console.log(`  • Deploy                        → Vercel, root directory ${c.g("scaffold")} (README: "Deploy")`);
 console.log("");
+
+// Clean, deterministic exit (no lingering readline handles on any platform).
+process.exit(0);
