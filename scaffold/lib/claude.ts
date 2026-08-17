@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { StartupProfile, Opportunity, Match, CriterionCheck, Tier } from "./types";
 import type { EligibilityBucket } from "./contracts/eligibilityDetermination";
 import { loadPrompt } from "./prompts";
+import { isFlagEnabled } from "./flags";
 import type { CostMeter } from "./metering/meter";
 import {
   type Assessment as TwoPassAssessment,
@@ -187,6 +188,18 @@ export async function extractProfile(
 }
 
 /**
+ * DISC §3-C — pick the scoring prompt. When `discernment_layer` is ON, use the
+ * rubric-ANCHORED variant (explicit 0-100 score bands → lower run-to-run
+ * variance); when OFF, the shipped prompt, byte-unchanged. Applied to BOTH the
+ * single-pass explainMatches and the two-pass Pass-A/Pass-B so scoring is
+ * consistent whichever scorer is active.
+ */
+function scorerPrompt(base: "explainMatches" | "scoreMatches"): string {
+  const anchored = base === "explainMatches" ? "explainMatchesAnchored" : "scoreMatchesAnchored";
+  return loadPrompt(isFlagEnabled("discernment_layer") ? anchored : base).template;
+}
+
+/**
  * Stage 2 — explain. Given candidate opportunities that already passed rules
  * and similarity, score each and write the four-part explanation.
  */
@@ -197,7 +210,7 @@ export async function explainMatches(
   onBatch?: (doneCandidates: number, totalCandidates: number) => void,
   signal?: AbortSignal,
 ): Promise<Array<{ id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyCare: string; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string }>> {
-  const SYSTEM = loadPrompt("explainMatches").template;
+  const SYSTEM = scorerPrompt("explainMatches");
 
   type Assessment = { id: string; score: number; tier: Tier; criteria: CriterionCheck[]; whyCare: string; whyFit: string; whyIneligible: string; whatToVerify: string; whatToDoNext: string };
 
@@ -386,7 +399,7 @@ async function scorePassA(
   meter: CostMeter | undefined,
   signal: AbortSignal | undefined,
 ): Promise<PassAScore[]> {
-  const SYSTEM = loadPrompt("scoreMatches").template;
+  const SYSTEM = scorerPrompt("scoreMatches");
   const BATCH_A = 12; // score-only output is tiny; larger batches cut call count
   const groups: Opportunity[][] = [];
   for (let i = 0; i < candidates.length; i += BATCH_A) groups.push(candidates.slice(i, i + BATCH_A));
@@ -453,7 +466,7 @@ async function narratePassB(
   signal: AbortSignal | undefined,
 ): Promise<TwoPassAssessment[]> {
   if (promoted.length === 0) return [];
-  const SYSTEM = loadPrompt("explainMatches").template;
+  const SYSTEM = scorerPrompt("explainMatches");
   const BATCH = 8;
   const groups: Opportunity[][] = [];
   for (let i = 0; i < promoted.length; i += BATCH) groups.push(promoted.slice(i, i + BATCH));

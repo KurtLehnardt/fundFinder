@@ -96,6 +96,77 @@ RULES THAT MATTER MORE THAN COVERAGE:
 6. Write for a founder, not a bureaucrat. Plain language. No jargon left
    untranslated.`;
 
+/**
+ * DISC §3-C — the rubric-ANCHORED explainMatches, selected by `lib/claude.ts`
+ * only when the `discernment_layer` flag is ON. Byte-identical to
+ * EXPLAIN_MATCHES_V2_TEMPLATE except for the added SCORING SCALE block: the model
+ * picks a BAND first, then the exact number, which the matching review found
+ * substantially compresses the run-to-run score spread (the 35–72 swings that
+ * made a match's tier a coin flip). The narrative rules and rule 1's
+ * no-definitive-eligibility guarantee are unchanged. A new prompt version (v3),
+ * so it does not touch V1_BASELINE_HASHES or the shipped v2.
+ */
+const EXPLAIN_MATCHES_ANCHORED_V3_TEMPLATE = `You assess fit between a startup and federal funding opportunities.
+
+Return ONLY a JSON array, no preamble, no markdown fences:
+[{
+  "id": string,
+  "score": number,          // 0-100
+  "tier": "likely"|"verify"|"adjacent"|"none",
+  "criteria": [{"label": string, "met": boolean, "note": string}],
+  "whyCare": string,
+  "whyFit": string,
+  "whyIneligible": string,
+  "whatToVerify": string,
+  "whatToDoNext": string
+}]
+
+SCORING SCALE — decide the BAND first, then the exact number within it. Anchoring to these bands is what keeps the SAME fit scored the SAME way run-to-run:
+- 0-20   No fit / wrong funding mechanism.
+- 21-34  Adjacent — topically near, but not an applicant fit.
+- 35-54  Partial / verify — a real but incomplete or uncertain fit.
+- 55-74  Strong — a genuine applicant fit on mechanism, technology, and eligibility posture.
+- 75-100 Exceptional — textbook fit; reserve for unambiguous cases.
+Judge each candidate on its own merits; do not spread scores to fill a curve.
+
+RULES THAT MATTER MORE THAN COVERAGE:
+
+1. You are NOT determining eligibility. Never state a definitive
+   determination. Use "appears to align", "you may qualify", "verify with the
+   program officer". This is required.
+
+2. whyCare is a DISTINCT field from whyFit — never just reword whyFit into a
+   second sentence. What it says depends on the candidate's "kind":
+   - For a "grant" or "rd" opportunity, whyCare answers "why you may fit":
+     one sentence naming the specific alignment between this company and this
+     program's funding purpose.
+   - For a "procurement" opportunity, or an "assistance" listing whose real
+     value is government-as-customer rather than a funding match, whyCare
+     answers a different question — "why this matters to you": one sentence
+     on the strategic value of the government as a customer (a revenue
+     channel, a past-performance credential, market validation, a foothold
+     competitors don't have). Do not phrase this one as fit or eligibility.
+   Always exactly one plain-language sentence. Rule 1 applies here too — hedge
+   ("could open the door to"), never assert ("will win you").
+
+3. whyIneligible must contain SPECIFIC, REAL concerns drawn from the actual
+   program and this actual company — never boilerplate, never empty. If you
+   cannot name a concrete concern, the match is weaker than you scored it.
+
+4. BE WILLING TO SAY NO. A company that does not fit federal grant mechanisms
+   should receive "none" tiers and low scores. Fabricating plausible-sounding
+   matches is the single worst failure mode here. Consumer marketplaces,
+   local service businesses, and companies with no R&D component frequently
+   have no strong federal grant match — say so plainly.
+
+5. criteria: 4-6 checks a program officer would actually apply (US-based small
+   business, active R&D component, technology area alignment, funding amount
+   consistent with program, commercialization potential, eligibility category).
+   Mark met honestly. Unmet criteria are informative, not failures to hide.
+
+6. Write for a founder, not a bureaucrat. Plain language. No jargon left
+   untranslated.`;
+
 const EXPLAIN_WEAK_FIELD_V1_TEMPLATE = "A startup has no strong federal grant matches. That is a legitimate\nand useful finding — deliver it with confidence, not apology.\n\nReturn ONLY JSON, no fences:\n{\n  \"headline\": string,      // one sentence, direct\n  \"reasoning\": string,     // 2-4 sentences: why this company profile does not\n                           // align with how federal grant mechanisms work\n  \"redirects\": [{\"label\": string, \"why\": string}]  // 3-5 concrete alternatives\n}\n\nRedirects should be specific and real: SBA programs, state economic\ndevelopment, local/community development, workforce and education funding,\nprocurement as a government customer, university partnerships. Name the\ncategory and say why it fits better than federal R&D grants.\n\nDo not hedge into implying they should apply anyway. The value here is saving\nthem weeks of wasted applications.";
 
 /**
@@ -438,6 +509,36 @@ RULES THAT DETERMINE THE SCORE:
 
 Output the JSON array only. No criteria, no prose, no explanation — just the id and score for every candidate you were given.`;
 
+/**
+ * DISC §3-C — the rubric-ANCHORED Pass-A score-only prompt, selected by
+ * `lib/claude.ts` only when `discernment_layer` is ON. Byte-identical to
+ * SCORE_MATCHES_V1_TEMPLATE except for the added SCORING SCALE bands, mirroring
+ * EXPLAIN_MATCHES_ANCHORED_V3 so the two-pass Pass-A promotes/holds the same
+ * candidates the anchored full pass would. Score-only, so it asserts nothing
+ * about eligibility (holds clear of BANNED_PHRASES by construction). A new
+ * version (v2); does not touch the shipped v1.
+ */
+const SCORE_MATCHES_ANCHORED_V2_TEMPLATE = `You score the fit between a startup and federal funding opportunities. This is a fast, cheap PRE-SCORING pass — a downstream step writes the full explanation, so here you output ONLY a numeric score per candidate and nothing else.
+
+Return ONLY a JSON array, no preamble, no markdown fences, one entry per candidate:
+[{ "id": string, "score": number }]   // score is 0-100, echo each candidate's id exactly
+
+RULES THAT DETERMINE THE SCORE:
+
+1. You are NOT determining eligibility and you assert nothing about it. The score is a fit signal only — how well this company aligns with this program's funding purpose and instrument type. A downstream step handles eligibility.
+
+2. BE WILLING TO SAY NO. Score conservatively. A company that does not fit a program's funding mechanism should score LOW. Inflating a weak fit into a plausible-looking score is the single worst failure here: consumer marketplaces, local service businesses, and companies with no R&D component frequently have no strong federal grant match — score them low and honestly. Reserve high scores for genuine, specific alignment.
+
+3. SCORING SCALE — decide the BAND first, then the exact number within it. Anchoring to these bands keeps the SAME fit scored the SAME way run-to-run:
+   - 0-20   No fit / wrong funding mechanism.
+   - 21-34  Adjacent — topically near, but not an applicant fit.
+   - 35-54  Partial / verify — a real but incomplete or uncertain fit.
+   - 55-74  Strong — a genuine applicant fit on mechanism, technology, and eligibility posture.
+   - 75-100 Exceptional — textbook fit; reserve for unambiguous cases.
+   Judge each candidate on its own merits — do not spread scores to fill a curve.
+
+Output the JSON array only. No criteria, no prose, no explanation — just the id and score for every candidate you were given.`;
+
 export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
   extractProfile: definePrompt("extractProfile", "v1", EXTRACT_PROFILE_V1_TEMPLATE),
   competitorAnalysis: definePrompt("competitorAnalysis", "v1", COMPETITOR_ANALYSIS_V1_TEMPLATE),
@@ -452,7 +553,11 @@ export const PROMPT_REGISTRY: Record<string, PromptEntry> = {
     DRAFT_APPLICATION_SECTION_V1_TEMPLATE,
   ),
   explainMatches: definePrompt("explainMatches", "v2", EXPLAIN_MATCHES_V2_TEMPLATE),
+  // DISC §3-C — rubric-anchored variants, selected by lib/claude.ts only when the
+  // discernment_layer flag is on. New versions; the shipped v2/v1 are untouched.
+  explainMatchesAnchored: definePrompt("explainMatchesAnchored", "v3", EXPLAIN_MATCHES_ANCHORED_V3_TEMPLATE),
   scoreMatches: definePrompt("scoreMatches", "v1", SCORE_MATCHES_V1_TEMPLATE),
+  scoreMatchesAnchored: definePrompt("scoreMatchesAnchored", "v2", SCORE_MATCHES_ANCHORED_V2_TEMPLATE),
   explainWeakField: definePrompt("explainWeakField", "v1", EXPLAIN_WEAK_FIELD_V1_TEMPLATE),
   generateInterviewQuestions: definePrompt(
     "generateInterviewQuestions",

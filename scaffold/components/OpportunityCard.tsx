@@ -401,9 +401,28 @@ export default function OpportunityCard({
                 {TIER_LABEL[m.tier]}
               </span>
             )}
+            {/* DISC — advisory recommend/verify/do-not-recommend verdict (flag ON only).
+                do_not_recommend gets the strongest treatment (bold foreground) so an
+                honest "don't apply" reads at a glance; both others stay quiet. */}
+            {m.recommendation && (
+              <p
+                className={`mt-1 font-mono text-[11px] uppercase tracking-eyebrow ${
+                  m.recommendation.recommendation === "do_not_recommend"
+                    ? "font-bold text-foreground"
+                    : "text-structure-on-canvas"
+                }`}
+              >
+                {m.recommendation.label}
+              </p>
+            )}
             <h3 className={titleClass}>{o.program}</h3>
             <p className={agencyClass}>{o.agency}</p>
             {m.whyCare?.trim() && <p className={whyCareClass}>{m.whyCare}</p>}
+            {m.recommendation?.basis?.trim() && (
+              <p className="mt-1 font-body text-[12px] leading-relaxed text-structure-on-canvas">
+                {m.recommendation.basis}
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
