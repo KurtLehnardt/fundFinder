@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { makeLlmClient, type LlmClient } from "../llm/client";
 
 import { loadPrompt } from "../prompts";
 import type { CostMeter } from "../metering/meter";
@@ -69,14 +70,8 @@ const MAX_TOKENS = 1200;
 // as G1's requirements.ts does).
 // ---------------------------------------------------------------------------
 
-function client(): Anthropic {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not set. Add it to .env.local and to your Vercel project settings.",
-    );
-  }
-  return new Anthropic({ apiKey: key, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
+function client(): LlmClient {
+  return makeLlmClient({ timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
 }
 
 /**

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { makeLlmClient, isLocalLlm, type LlmClient } from "./llm/client";
 import type { StartupProfile, Opportunity, Match, CriterionCheck, Tier } from "./types";
 import type { EligibilityBucket } from "./contracts/eligibilityDetermination";
 import { loadPrompt } from "./prompts";
@@ -45,10 +46,9 @@ const CHEAP_MODEL = process.env.PROFILE_EXTRACTION_MODEL || "claude-haiku-4-5-20
  */
 const ANTHROPIC_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS) || 100_000;
 
-function client() {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
-  return new Anthropic({ apiKey: key, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
+function client(): LlmClient {
+  // Anthropic by default; an OpenAI-compatible LOCAL model when LLM_PROVIDER is set.
+  return makeLlmClient({ timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
 }
 
 /**
@@ -96,13 +96,31 @@ function firstBalancedJson(text: string): string | undefined {
  * This keeps a single non-strict-JSON response from failing the whole search
  * (H-review: `extractProfile` JSON-parse fragility).
  */
+/**
+ * Local models under JSON-object mode (lib/llm/client.ts) return valid JSON but
+ * sometimes wrap a bare array in a single key, e.g. {"candidates":[...]}. When
+ * the value is an object with exactly ONE key whose value is an array, unwrap to
+ * that array so the array-shaped callers keep working. Multi-key objects (every
+ * object-returning prompt) and already-bare arrays (the default Anthropic path)
+ * are returned untouched — so this is a no-op for hosted Claude.
+ */
+export function unwrapArrayEnvelope(value: unknown): unknown {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 1 && Array.isArray((value as Record<string, unknown>)[keys[0]])) {
+      return (value as Record<string, unknown>)[keys[0]];
+    }
+  }
+  return value;
+}
+
 function parseJson<T>(raw: string): T {
   const clean = raw.replace(/```json/g, "").replace(/```/g, "").trim();
   try {
-    return JSON.parse(clean) as T;
+    return unwrapArrayEnvelope(JSON.parse(clean)) as T;
   } catch (err) {
     const balanced = firstBalancedJson(clean);
-    if (balanced !== undefined) return JSON.parse(balanced) as T;
+    if (balanced !== undefined) return unwrapArrayEnvelope(JSON.parse(balanced)) as T;
     throw err;
   }
 }
@@ -218,7 +236,10 @@ export async function explainMatches(
   // ~700-900 output tokens each and dominates request latency (~3 min for 24
   // candidates); concurrent batches cut wall-clock ~3x with identical per-
   // candidate scoring. max_tokens per batch stays well clear of truncation.
-  const BATCH = 8;
+  // Hosted: 8/batch, run concurrently. Local: smaller batches (less output per
+  // call → each finishes faster on a slow single-GPU model) run serially. Both
+  // env-overridable via LLM_BATCH_SIZE.
+  const BATCH = Number(process.env.LLM_BATCH_SIZE) || (isLocalLlm() ? 3 : 8);
   const groups: Opportunity[][] = [];
   for (let i = 0; i < candidates.length; i += BATCH) groups.push(candidates.slice(i, i + BATCH));
 
@@ -279,14 +300,29 @@ export async function explainMatches(
   // 52%->90% dead-zone).
   const fanOutStart = performance.now();
   let doneCandidates = 0;
-  const settled = await Promise.allSettled(
-    groups.map((group) =>
-      scoreGroup(group).finally(() => {
-        doneCandidates += group.length;
-        try { onBatch?.(doneCandidates, candidates.length); } catch { /* progress is best-effort */ }
-      }),
-    ),
-  );
+  const runGroup = (group: Opportunity[]) =>
+    scoreGroup(group).finally(() => {
+      doneCandidates += group.length;
+      try { onBatch?.(doneCandidates, candidates.length); } catch { /* progress is best-effort */ }
+    });
+  // A local single-GPU backend (Ollama) serves requests SERIALLY, so firing all
+  // batches at once just makes the queued ones blow their own per-call timeout
+  // while they wait. Run them one at a time when local (each timer then starts
+  // when the batch is actually dispatched); keep the ~3x concurrent fan-out for
+  // hosted providers. Fault-tolerance (keep whatever succeeds) is identical.
+  let settled: PromiseSettledResult<Assessment[]>[];
+  if (isLocalLlm()) {
+    settled = [];
+    for (const group of groups) {
+      try {
+        settled.push({ status: "fulfilled", value: await runGroup(group) });
+      } catch (reason) {
+        settled.push({ status: "rejected", reason } as PromiseRejectedResult);
+      }
+    }
+  } else {
+    settled = await Promise.allSettled(groups.map(runGroup));
+  }
   // R4b — batches ran CONCURRENTLY, so the stage's latency is the wall-clock
   // of the whole fan-out, not a sum of the per-batch latencies recorded above
   // (summing would overcount — this overwrites that sum with the real span).
@@ -342,10 +378,8 @@ const E3_TWO_PASS_TIMEOUT_MS = Number(process.env.E3_TWO_PASS_TIMEOUT_MS) || 45_
 const E3_TWO_PASS_MAX_RETRIES = Number(process.env.E3_TWO_PASS_MAX_RETRIES) || 3;
 const E3_TWO_PASS_BACKOFF_MS = Number(process.env.E3_TWO_PASS_BACKOFF_MS) || 500;
 
-function twoPassClient(): Anthropic {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env.local and to your Vercel project settings.");
-  return new Anthropic({ apiKey: key, timeout: E3_TWO_PASS_TIMEOUT_MS, maxRetries: 0 });
+function twoPassClient(): LlmClient {
+  return makeLlmClient({ timeout: E3_TWO_PASS_TIMEOUT_MS, maxRetries: 0 });
 }
 
 /**

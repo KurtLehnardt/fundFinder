@@ -59,6 +59,40 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Everything else in `.env.example` is optional and documented inline. Start with `npm run dev`.
 
+## Run on a local model (Ollama — no API keys, can be fully offline)
+
+Don't want to pay for or send data to a hosted model? Point the reasoning at a local LLM. The scoring, explanations, and honest verdicts then run entirely on your machine.
+
+1. Install [Ollama](https://ollama.com) and pull a capable instruction model:
+   ```bash
+   ollama pull gemma4        # or qwen2.5, llama3.1 — pick one that follows JSON well
+   ```
+2. In `scaffold/.env.local`:
+   ```bash
+   LLM_PROVIDER=ollama
+   LOCAL_LLM_MODEL=gemma4:latest
+   # ANTHROPIC_API_KEY is no longer needed.
+   ```
+3. `npm run dev`. Every scoring/explanation call now routes to Ollama's OpenAI-compatible endpoint, with grammar-constrained JSON so a local model stays parseable. Any OpenAI-compatible server works (LM Studio, vLLM, llama.cpp) — set `LLM_BASE_URL` to its `/v1` URL.
+
+### Fully offline
+By default the tiny query embedding still uses OpenAI (the corpus ships pre-embedded at 512 dims; it costs fractions of a cent). To remove that last hosted call, run embeddings locally and re-embed the corpus once:
+```bash
+ollama pull nomic-embed-text
+# in .env.local:
+EMBEDDINGS_BASE_URL=http://localhost:11434/v1
+EMBEDDINGS_MODEL=nomic-embed-text
+npm run data:embed        # re-embeds the 968-opportunity corpus locally (~1–2 min)
+```
+Now nothing leaves your machine.
+
+### The honest tradeoff
+Hosted Claude is faster and more reliable at the strict, structured JSON this pipeline asks for, and its scoring is better calibrated. A capable local model handles it — in testing, gemma4 ran the full pipeline end to end and reached the *same headline verdict* as hosted Claude on the same input (a genuine strong fit, with the right NIH SBIR grant as its top recommendation) — but:
+- **It's much slower.** A single local GPU serves the scoring batches one at a time, so a full 24-candidate search can take several minutes (vs. ~90s hosted). Batches run serially and smaller when local (`LLM_BATCH_SIZE`, default 3) to stay under the per-call timeout; raise `ANTHROPIC_TIMEOUT_MS` if a big model needs longer.
+- **Quality is rougher.** Smaller or older models score less consistently and occasionally emit JSON even the repair layer can't recover. Use a strong instruction-following model, and expect a coarser result than the hosted default.
+
+It's a real option for privacy or zero-cost runs — just not the fast path.
+
 ## Feature flags (turn on the good stuff)
 
 Everything risky ships **default-OFF** so a fresh clone is safe and boring. Flip these in `.env.local` (they're `NEXT_PUBLIC_*`, so **restart `npm run dev` after changing them**):

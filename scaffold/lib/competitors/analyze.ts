@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { makeLlmClient } from "../llm/client";
 import { embedBatch, cosine } from "../embed";
 import { loadPrompt } from "../prompts";
 import type { CostMeter } from "../metering/meter";
@@ -190,9 +190,7 @@ async function synthesize(
   records: GroundedAwardRecord[],
   webProfiles: WebCompetitorProfile[],
 ): Promise<RawSynthesis> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY is not set.");
-  const client = new Anthropic({ apiKey: key, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
+  const client = makeLlmClient({ timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
 
   const awardEvidence = records.map((r) => ({
     id: r.id, recipient: r.recipient, agency: r.agency, amount: r.amount, program: r.program, abstract: r.abstract,
