@@ -34,6 +34,10 @@ export default function LoginPage() {
   // with it off, that option is the existing simulated mock sign-in. The demo
   // option is always an honest, local demo identity in either case.
   const realAuth = isFlagEnabled('r9_supabase_auth');
+  // The hackathon-judge demo sign-in is commercial/demo scaffolding — hidden by
+  // default so a self-hosted user just sees real sign-in. Flip commercial_ui to restore.
+  const showModeToggle = isFlagEnabled('commercial_ui');
+  const asGoogle = !showModeToggle || mode === 'google';
 
   // Already signed in (real, mock, or demo)? Skip the screen.
   useEffect(() => {
@@ -73,7 +77,8 @@ export default function LoginPage() {
 
         {/* Runtime toggle: real Google account vs. hackathon-judge demo.
             Native radios grouped in a fieldset give free keyboard support and
-            screen-reader "radio group" semantics. */}
+            screen-reader "radio group" semantics. Hidden unless commercial_ui is on. */}
+        {showModeToggle && (
         <fieldset className="mt-8">
           <legend className="sr-only">Choose how to sign in</legend>
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-canvas p-1">
@@ -105,8 +110,9 @@ export default function LoginPage() {
             </label>
           </div>
         </fieldset>
+        )}
 
-        {mode === 'google' ? (
+        {asGoogle ? (
           <button
             type="button"
             onClick={handleContinue}
@@ -126,7 +132,7 @@ export default function LoginPage() {
         )}
 
         <p className="mt-4 text-center text-xs leading-relaxed text-foreground">
-          {mode === 'google'
+          {asGoogle
             ? realAuth
               ? 'Sign in with your real Google account.'
               : 'Simulated sign-in for demo purposes. No Google account is contacted and no credentials are collected.'

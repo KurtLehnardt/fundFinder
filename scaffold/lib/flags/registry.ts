@@ -45,7 +45,8 @@ export type FlagName =
   | "d5_alerts"
   | "r5_deep_analysis"
   | "e3_two_pass"
-  | "discernment_layer";
+  | "discernment_layer"
+  | "commercial_ui";
 
 export interface FlagDefinition {
   /** Stable identifier. Matches the key it's stored under in FLAG_REGISTRY. */
@@ -239,5 +240,15 @@ export const FLAG_REGISTRY: Record<FlagName, FlagDefinition> = {
       "and any FOUNDER-STATED disqualifier. Recounts 'high potential' as recommend-only and raises the bar " +
       "per instrument type. Advisory, never an eligibility ruling (R8.4); default OFF until golden-set validated.",
     envVar: "NEXT_PUBLIC_FLAG_DISCERNMENT_LAYER",
+  },
+  commercial_ui: {
+    name: "commercial_ui",
+    requirement: "COMM",
+    description:
+      "Commercial / demo scaffolding in the UI: the mock Billing section + plan tiers, the 'Maximum/Pro " +
+      "plan' framing and padlocks on the competitor & auto-apply surfaces, and the hackathon-judge demo " +
+      "sign-in toggle. Default OFF so a self-hosted / run-it-locally user is never shown a subscription " +
+      "for something that is free to run; the underlying code stays in place. Flip ON to restore the paid framing.",
+    envVar: "NEXT_PUBLIC_FLAG_COMMERCIAL_UI",
   },
 };

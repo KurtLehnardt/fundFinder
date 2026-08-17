@@ -65,7 +65,10 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
 
   const { tier, setTier } = useBilling();
   const { competitorEnabled } = useEntitlements(tier);
-  const isMax = competitorEnabled; // competitor_intelligence is a Max-only feature.
+  // Hide the paid framing (Maximum-plan eyebrow / padlock / upgrade) unless
+  // commercial_ui is on; then the feature is simply available. Code stays intact.
+  const commercial = isFlagEnabled("commercial_ui");
+  const isMax = competitorEnabled || !commercial; // full access when commercial UI is hidden
 
   // Live run is offered ONLY when the default-OFF flag is on, the tier is Max,
   // and we actually have a company description to ground the run in.
@@ -297,10 +300,12 @@ export default function CompetitorAnalysisModal({ onClose, profile, opportunity 
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 pr-8">
-              <LockIcon className="h-3.5 w-3.5" />
-              <p className={eyebrowClass}>{isMax ? "Maximum plan · included" : "Maximum plan"}</p>
-            </div>
+            {commercial && (
+              <div className="flex items-center gap-2 pr-8">
+                <LockIcon className="h-3.5 w-3.5" />
+                <p className={eyebrowClass}>{isMax ? "Maximum plan · included" : "Maximum plan"}</p>
+              </div>
+            )}
 
             <h2 id="competitor-analysis-modal-title" className={titleClass}>
               Competitor &amp; grant intelligence

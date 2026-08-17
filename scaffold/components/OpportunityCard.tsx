@@ -193,6 +193,9 @@ export default function OpportunityCard({
   const { features } = useBilling();
   const autoApplyUnlocked = sidebar && features.autoApply;
   const competitorUnlocked = sidebar && features.competitor;
+  // Hide the paid framing (padlocks + "plan"/"Pro/Max" hint copy) unless
+  // commercial_ui is on. The buttons + preview flows are unchanged.
+  const commercial = isFlagEnabled("commercial_ui");
 
   const spine = TIER_COLOR[m.tier] ?? TIER_COLOR.none;
   const color = TIER_TEXT[m.tier] ?? TIER_TEXT.none;
@@ -497,11 +500,14 @@ export default function OpportunityCard({
           aria-haspopup="dialog"
           className={autoApplyBtnClass}
         >
-          {!autoApplyUnlocked && <LockIcon className="h-3 w-3" />}
+          {!autoApplyUnlocked && commercial && <LockIcon className="h-3 w-3" />}
           Auto Apply
         </button>
         <span className={autoApplyHintClass}>
-          {autoApplyUnlocked ? (
+          {!commercial ? (
+            // Commercial framing hidden: describe the feature state, no plan/Pro.
+            assistedApplyFlow ? "Preview" : "Not live yet"
+          ) : autoApplyUnlocked ? (
             // The hint must match what clicking actually opens: the walkable
             // preview (r6 on) vs. the "not live yet" modal (r6 off). Claiming
             // "included in your plan" while the modal says "not available yet"
@@ -623,14 +629,16 @@ export default function OpportunityCard({
                   aria-haspopup="dialog"
                   className={competitorBtnClass}
                 >
-                  {!competitorUnlocked && <LockIcon className="h-3 w-3" />}
+                  {!competitorUnlocked && commercial && <LockIcon className="h-3 w-3" />}
                   Analyze competing companies
                 </button>
                 <span className={competitorHintClass}>
                   {/* Honest hint: with r5_deep_analysis ON, an unlocked (Max) tier
                       really can run a live brief; with it OFF the surface is the
                       saved example only. Locked tiers can still preview the example. */}
-                  {competitorUnlocked ? (
+                  {!commercial ? (
+                    isFlagEnabled("r5_deep_analysis") ? <>Live</> : <>Example</>
+                  ) : competitorUnlocked ? (
                     isFlagEnabled("r5_deep_analysis") ? (
                       <>In your plan &middot; live</>
                     ) : (

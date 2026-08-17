@@ -42,5 +42,6 @@ export function readRawOverrides(): Record<FlagName, string | undefined> {
     r5_deep_analysis: process.env.NEXT_PUBLIC_FLAG_R5_DEEP_ANALYSIS,
     e3_two_pass: process.env.NEXT_PUBLIC_FLAG_E3_TWO_PASS,
     discernment_layer: process.env.NEXT_PUBLIC_FLAG_DISCERNMENT_LAYER,
+    commercial_ui: process.env.NEXT_PUBLIC_FLAG_COMMERCIAL_UI,
   };
 }
