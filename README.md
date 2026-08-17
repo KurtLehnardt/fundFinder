@@ -155,6 +155,28 @@ export NSF_ID='...'
 
 > A **UEI alone is not enough** to apply — grant portals reject it until your **SAM.gov registration is Active** (which can take ~2 weeks). See `scaffold/components/ApplicationChecklist.tsx`.
 
+## Chrome extension (assisted fill) — experimental
+
+An optional companion extension (`extension/`, "Granted Assisted Fill") can pre-fill a grant portal's application form **in your own authenticated browser session**, from a package the app generates. Think of it like a password manager for grant forms: it fills what it can ground, flags what it can't, and lets you step through the portal's own sections. **It never submits, signs, certifies, or files anything** — your organization's Authorized Organization Representative (AOR) reviews everything and clicks the portal's own submit button.
+
+**Load it into Chrome:**
+```bash
+cd extension
+npm install
+npm run build            # emits a loadable extension into extension/dist/
+```
+Then in Chrome (or any Chromium browser): open `chrome://extensions` → turn on **Developer mode** (top-right) → **Load unpacked** → select `extension/dist/`. The "Granted Assisted Fill" icon appears in the toolbar. After code changes, re-run `npm run build` and hit reload on the extension's card.
+
+**What it needs to actually fill a form:**
+- A completed application **package exported from the Granted app** — that's the set of fields and grounded values to fill.
+- Your **federal identifiers on file** (UEI, ORCID, NSF ID, grants.gov login) — the values that go into the form.
+- **Real field selectors captured for the specific portal** (see the caveat below — they do not ship).
+- An **Active SAM.gov registration**, so you can actually log into the portal the extension is filling.
+
+**Honest state — it is not a working auto-filler yet.** Every portal field selector in `extension/src/config/portals/*.ts` ships as a `TODO:` placeholder, because the initial recon couldn't reach the four target portals (grants.gov, NIH ASSIST, Research.gov, SBIR.gov) — they sit behind login and an **Active SAM.gov registration**. So out of the box the extension loads but fills nothing (and `nih_assist` has no steps at all). To make it actually fill, you capture the real selectors from a live portal session — `extension/README.md` documents that step-by-step procedure — and to reach those portals you first need your SAM.gov registration Active (which can take ~2 weeks).
+
+By design it is an assistive form-filler, not a submission service: a human always files.
+
 ## Refreshing the data (optional)
 
 The corpus (`scaffold/data/opportunities.json`, 968 opportunities across grants.gov, SAM.gov, SBIR, USAspending) is committed, so you don't need this to run. To rebuild it from the live public sources:
@@ -197,6 +219,7 @@ Results **stream** — progress and grounded evidence appear in seconds rather t
 ├── go-to-market/                 (positioning, strategy, validation-outreach kit)
 ├── retrospective/                (build retrospective + architecture diagram)
 ├── supabase/migrations/          (optional corpus-store schema)
+├── extension/                    (optional Chrome "assisted fill" extension — experimental)
 └── scaffold/                     (the Next.js app — Vercel Root Directory)
     ├── .env.example              (all env vars, documented)
     ├── scripts/setup.mjs         (npm run setup)
